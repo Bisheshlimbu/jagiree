@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 394" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="900" y2="394" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1e3a8a"/>
+      <stop offset="0.5" stop-color="#2563eb"/>
+      <stop offset="1" stop-color="#93c5fd"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="520" y1="80" x2="820" y2="320" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0f172a" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#1e40af" stop-opacity="0.85"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="394" fill="url(#bg)"/>
+  <!-- subtle grid -->
+  <g opacity="0.08" stroke="#fff" stroke-width="1">
+    <line x1="0" y1="98" x2="900" y2="98"/><line x1="0" y1="196" x2="900" y2="196"/>
+    <line x1="0" y1="294" x2="900" y2="294"/><line x1="225" y1="0" x2="225" y2="394"/>
+    <line x1="450" y1="0" x2="450" y2="394"/><line x1="675" y1="0" x2="675" y2="394"/>
+  </g>
+  <!-- person silhouette -->
+  <ellipse cx="280" cy="340" rx="120" ry="24" fill="#000" opacity="0.15"/>
+  <path d="M220 340V220c0-44 36-80 80-80h0c44 0 80 36 80 80v120" fill="#1e293b"/>
+  <circle cx="300" cy="120" r="52" fill="#334155"/>
+  <path d="M248 200c8-28 28-44 52-44s44 16 52 44" fill="#475569"/>
+  <!-- laptop / screen -->
+  <rect x="480" y="100" width="320" height="200" rx="12" fill="url(#screen)" stroke="rgba(255,255,255,0.2)" stroke-width="2"/>
+  <rect x="500" y="120" width="280" height="8" rx="4" fill="#10b981" opacity="0.9"/>
+  <rect x="500" y="140" width="200" height="6" rx="3" fill="rgba(255,255,255,0.3)"/>
+  <rect x="500" y="158" width="240" height="6" rx="3" fill="rgba(255,255,255,0.2)"/>
+  <rect x="500" y="176" width="180" height="6" rx="3" fill="rgba(255,255,255,0.2)"/>
+  <rect x="500" y="210" width="120" height="28" rx="6" fill="#10b981" opacity="0.8"/>
+  <text x="560" y="229" fill="#fff" font-family="system-ui,sans-serif" font-size="12" font-weight="600" text-anchor="middle">88% Match</text>
+  <!-- decorative dots -->
+  <circle cx="120" cy="80" r="4" fill="#fff" opacity="0.3"/>
+  <circle cx="780" cy="60" r="6" fill="#fff" opacity="0.25"/>
+  <circle cx="840" cy="320" r="5" fill="#fff" opacity="0.2"/>
+</svg>
