@@ -177,6 +177,19 @@ ul {
   flex-shrink: 0;
 }
 
+.logo--logo-only .logo-image {
+  width: auto;
+  max-width: 160px;
+  height: auto;
+  max-height: 40px;
+  object-fit: contain;
+}
+
+.footer-brand .logo--logo-only .logo-image {
+  max-width: 180px;
+  max-height: 44px;
+}
+
 .nav-center {
   display: flex;
   align-items: center;

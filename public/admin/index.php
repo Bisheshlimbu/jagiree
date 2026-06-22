@@ -1,23 +1,20 @@
 <?php
+require_once __DIR__ . '/../../includes/admin/dashboard.php';
+require_once __DIR__ . '/../../includes/flash.php';
+
 $pageTitle = 'Overview — Jagiree Admin';
 $activePage = 'dashboard';
 $pageHeading = 'Overview';
 require_once __DIR__ . '/../../includes/admin/layout-start.php';
 
-$stats = [
-    ['label' => 'Total Users', 'value' => '24,512', 'trend' => '+12.5%', 'trendType' => 'up', 'icon' => 'users'],
-    ['label' => 'Monthly Growth', 'value' => '3,204', 'trend' => '+4.2%', 'trendType' => 'up', 'icon' => 'growth'],
-    ['label' => 'Active Jobs', 'value' => '1,842', 'trend' => '-0.8%', 'trendType' => 'down', 'icon' => 'jobs'],
-    ['label' => 'Pending Requests', 'value' => '56', 'trend' => 'Stable', 'trendType' => 'neutral', 'icon' => 'reports'],
-];
-
-$registrations = [
-    ['name' => 'Sarah Jenkins', 'email' => 'sarah.j@email.com', 'role' => 'Seeker', 'location' => 'Kathmandu, Nepal', 'status' => 'verified', 'avatar' => 32],
-    ['name' => 'Marcus Thorne', 'email' => 'm.thorne@corp.io', 'role' => 'Employer', 'location' => 'Lalitpur, Nepal', 'status' => 'verified', 'avatar' => 15],
-    ['name' => 'Elena Rodriguez', 'email' => 'elena.r@design.net', 'role' => 'Seeker', 'location' => 'Pokhara, Nepal', 'status' => 'pending', 'avatar' => 45],
-    ['name' => 'David Chen', 'email' => 'd.chen@tech.dev', 'role' => 'Employer', 'location' => 'Remote', 'status' => 'verified', 'avatar' => 68],
-];
+$dashboard = getAdminDashboardData();
+$stats = $dashboard['stats'];
+$registrations = $dashboard['registrations'];
+$insights = $dashboard['insights'];
+$chartData = $dashboard['chart'];
 ?>
+
+<?php renderAdminFlash(); ?>
 
 <div class="stats-grid">
     <?php foreach ($stats as $stat): ?>
@@ -37,7 +34,7 @@ $registrations = [
             </span>
         </div>
         <div class="stat-value"><?= htmlspecialchars($stat['value']) ?></div>
-        <span class="stat-trend stat-trend--<?= $stat['trendType'] ?>"><?= htmlspecialchars($stat['trend']) ?></span>
+        <span class="stat-trend stat-trend--<?= htmlspecialchars($stat['trendType']) ?>"><?= htmlspecialchars($stat['trend']) ?></span>
     </article>
     <?php endforeach; ?>
 </div>
@@ -47,11 +44,11 @@ $registrations = [
         <div class="panel-header">
             <div>
                 <h2>Platform Activity</h2>
-                <p>Real-time user engagement metrics</p>
+                <p>New user registrations over time</p>
             </div>
             <div class="chart-toggle" role="group" aria-label="Chart period">
-                <button type="button" class="chart-toggle-btn">Weekly</button>
-                <button type="button" class="chart-toggle-btn is-active">Monthly</button>
+                <button type="button" class="chart-toggle-btn" data-period="weekly">Weekly</button>
+                <button type="button" class="chart-toggle-btn is-active" data-period="monthly">Monthly</button>
             </div>
         </div>
         <div class="chart-wrap">
@@ -67,17 +64,14 @@ $registrations = [
             </h2>
         </div>
 
-        <div class="insight-card insight-card--purple">
-            <h3>Growth Opportunity</h3>
-            <p>Tech sector listings are up 18% this week. Consider targeted outreach to IT employers in Kathmandu.</p>
+        <?php foreach ($insights as $insight): ?>
+        <div class="insight-card insight-card--<?= htmlspecialchars($insight['type']) ?>">
+            <h3><?= htmlspecialchars($insight['title']) ?></h3>
+            <p><?= htmlspecialchars($insight['text']) ?></p>
         </div>
+        <?php endforeach; ?>
 
-        <div class="insight-card insight-card--teal">
-            <h3>Retention Alert</h3>
-            <p>Weekend engagement is 12% lower than average. Suggest automated nudges for inactive seekers.</p>
-        </div>
-
-        <button type="button" class="btn-audit">Generate Full Audit &gt;</button>
+        <a href="/admin/analytics.php" class="btn-audit">View Analytics &gt;</a>
     </aside>
 </div>
 
@@ -93,49 +87,32 @@ $registrations = [
                 <tr>
                     <th>User</th>
                     <th>Role</th>
-                    <th>Location</th>
+                    <th>Company Name</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($registrations as $user): ?>
+                <?php if ($registrations === []): ?>
                 <tr>
-                    <td>
-                        <div class="table-user">
-                            <img src="https://i.pravatar.cc/80?img=<?= $user['avatar'] ?>" alt="">
-                            <div>
-                                <strong><?= htmlspecialchars($user['name']) ?></strong>
-                                <span><?= htmlspecialchars($user['email']) ?></span>
-                            </div>
-                        </div>
-                    </td>
-                    <td><?= htmlspecialchars($user['role']) ?></td>
-                    <td><?= htmlspecialchars($user['location']) ?></td>
-                    <td>
-                        <span class="status-badge status-badge--<?= $user['status'] ?>">
-                            <?= $user['status'] === 'verified' ? 'Verified' : 'Pending' ?>
-                        </span>
-                    </td>
-                    <td>
-                        <div class="table-actions">
-                            <button type="button" class="table-action-btn" aria-label="Edit user">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            </button>
-                            <button type="button" class="table-action-btn table-action-btn--danger" aria-label="Delete user">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
-                        </div>
-                    </td>
+                    <td colspan="5" class="table-empty">No registrations yet.</td>
                 </tr>
-                <?php endforeach; ?>
+                <?php else: ?>
+                    <?php foreach ($registrations as $user): ?>
+                        <?php require __DIR__ . '/../../includes/admin/user-table-row.php'; ?>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </tbody>
         </table>
     </div>
 </section>
 
-<button type="button" class="admin-fab" aria-label="Add new">
+<a href="/admin/user-add.php" class="admin-fab" aria-label="Add user">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-</button>
+</a>
+
+<script>
+window.adminDashboardChart = <?= json_encode($chartData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+</script>
 
 <?php require_once __DIR__ . '/../../includes/admin/layout-end.php'; ?>

@@ -1,16 +1,10 @@
 <footer class="site-footer">
+    <?php require_once __DIR__ . '/site-brand.php'; ?>
+    <?php $siteName = siteName(); ?>
     <div class="container">
         <div class="footer-grid">
             <div class="footer-brand">
-                <a href="/" class="logo">
-                    <span class="logo-icon" aria-hidden="true">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="2" y="7" width="20" height="14" rx="2"/>
-                            <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-                        </svg>
-                    </span>
-                    Jagiree
-                </a>
+                <?php renderSiteBrand('landing'); ?>
                 <p>The intelligent job platform helping professionals grow faster in the AI era.</p>
                 <div class="footer-social">
                     <a href="#" aria-label="Website">
@@ -26,7 +20,7 @@
                 <h4>Platform</h4>
                 <ul>
                     <li><a href="#jobs">Job Board</a></li>
-                    <li><a href="#chat">AI Assistant</a></li>
+                    <li><a href="/seeker/chat.php">AI Assistant</a></li>
                     <li><a href="#employers">Pricing</a></li>
                 </ul>
             </div>
@@ -60,17 +54,22 @@
         </div>
 
         <div class="footer-bottom">
-            <p>&copy; <?= date('Y') ?> Jagiree. All rights reserved.</p>
+            <p>&copy; <?= date('Y') ?> <?= htmlspecialchars($siteName) ?>. All rights reserved.</p>
         </div>
     </div>
 </footer>
 
-<button class="chatbot-fab" id="chat" aria-label="Open AI assistant" title="Chat with Jagiree Assistant">
+<button class="chatbot-fab" aria-label="Open AI assistant" title="Chat with <?= htmlspecialchars($siteName) ?> Assistant" onclick="window.location.href='/seeker/chat.php'">
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
     </svg>
 </button>
 
 <script src="/assets/js/landing.js"></script>
+<?php
+$extraScripts = $extraScripts ?? [];
+foreach ($extraScripts as $script): ?>
+<script src="<?= htmlspecialchars($script) ?>"></script>
+<?php endforeach; ?>
 </body>
 </html>

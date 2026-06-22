@@ -24,10 +24,9 @@ if ($uri !== '/' && file_exists($file) && !is_dir($file)) {
 
     if (isset($mimeTypes[$ext])) {
         header('Content-Type: ' . $mimeTypes[$ext]);
+        readfile($file);
+        return true;
     }
-
-    readfile($file);
-    return true;
 }
 
 // Route PHP pages from /public

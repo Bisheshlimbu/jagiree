@@ -1,5 +1,12 @@
 <?php
-$pageTitle = $pageTitle ?? 'Admin Dashboard — Jagiree';
+require_once __DIR__ . '/../auth.php';
+require_once __DIR__ . '/../users.php';
+require_once __DIR__ . '/../site-brand.php';
+requireRole(ROLE_ADMIN);
+
+$authUser = currentUser();
+$siteName = siteName();
+$pageTitle = $pageTitle ?? 'Admin Dashboard — ' . $siteName;
 $activePage = $activePage ?? 'dashboard';
 $pageHeading = $pageHeading ?? 'Overview';
 ?>
@@ -17,21 +24,14 @@ $pageHeading = $pageHeading ?? 'Overview';
 <body class="admin-body">
 
 <div class="admin-app">
-    <aside class="admin-sidebar">
-        <a href="/admin/" class="sidebar-brand">
-            <span class="sidebar-brand-icon">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 2 2 7l10 5 10-5-10-5z"/>
-                    <path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-            </span>
-            Jagiree
-        </a>
+    <button type="button" class="sidebar-backdrop" aria-label="Close navigation menu" tabindex="-1"></button>
+    <aside class="admin-sidebar" id="admin-sidebar">
+        <?php renderSiteBrand('admin'); ?>
 
         <div class="sidebar-profile">
-            <img src="https://i.pravatar.cc/80?img=12" alt="Admin" class="sidebar-avatar">
+            <img src="<?= htmlspecialchars(userAvatarUrl($authUser)) ?>" alt="<?= htmlspecialchars(displayName($authUser)) ?>" class="sidebar-avatar<?= userHasAvatar($authUser) ? '' : ' user-avatar--placeholder' ?>">
             <div class="sidebar-profile-info">
-                <strong>Admin Account</strong>
+                <strong><?= htmlspecialchars(displayName($authUser)) ?></strong>
                 <span>Administrator</span>
             </div>
             <span class="sidebar-badge">ADMIN</span>
@@ -69,7 +69,7 @@ $pageHeading = $pageHeading ?? 'Overview';
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Feedback
             </a>
-            <a href="/" class="sidebar-link sidebar-link--danger">
+            <a href="/logout.php" class="sidebar-link sidebar-link--danger">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                 Logout
             </a>
@@ -78,7 +78,12 @@ $pageHeading = $pageHeading ?? 'Overview';
 
     <div class="admin-main">
         <header class="admin-topbar">
-            <h1 class="topbar-title"><?= htmlspecialchars($pageHeading) ?></h1>
+            <div class="topbar-left">
+                <button type="button" class="topbar-menu-btn" aria-label="Toggle menu" aria-expanded="false" aria-controls="admin-sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+                <h1 class="topbar-title"><?= htmlspecialchars($pageHeading) ?></h1>
+            </div>
             <div class="topbar-search">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <input type="search" placeholder="Search data..." aria-label="Search dashboard">
@@ -88,7 +93,7 @@ $pageHeading = $pageHeading ?? 'Overview';
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                     <span class="topbar-notify-dot"></span>
                 </button>
-                <img src="https://i.pravatar.cc/80?img=12" alt="Admin profile" class="topbar-avatar">
+                <img src="<?= htmlspecialchars(userAvatarUrl($authUser)) ?>" alt="<?= htmlspecialchars(displayName($authUser)) ?> profile" class="topbar-avatar<?= userHasAvatar($authUser) ? '' : ' user-avatar--placeholder' ?>">
             </div>
         </header>
 

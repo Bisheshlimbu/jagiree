@@ -1,0 +1,7 @@
+.env
+database/*.sqlite
+database/*.sqlite-journal
+public/assets/uploads/avatars/*
+!public/assets/uploads/avatars/.gitkeep
+public/assets/uploads/site/*
+!public/assets/uploads/site/.gitkeep

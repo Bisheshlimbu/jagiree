@@ -48,7 +48,7 @@ $trendingJobs = [
                     companies through precision AI analysis.
                 </p>
                 <div class="hero-actions">
-                    <a href="/register.php?role=seeker" class="btn btn-primary btn-lg">Get Started</a>
+                    <a href="/register-seeker.php" class="btn btn-primary btn-lg">Get Started</a>
                     <a href="#features" class="btn btn-outline btn-lg">How it Works</a>
                 </div>
             </div>
@@ -177,7 +177,7 @@ $trendingJobs = [
                 <div class="employer-content">
                     <h2>Hiring? Find your next star candidate in minutes, not months.</h2>
                     <div class="employer-actions">
-                        <a href="/register.php?role=employer" class="btn btn-white btn-lg">Post a Job</a>
+                        <a href="/register-employer.php" class="btn btn-white btn-lg">Post a Job</a>
                         <a href="/contact.php" class="btn btn-ghost-white btn-lg">Request a Demo</a>
                     </div>
                 </div>
