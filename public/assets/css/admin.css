@@ -1056,6 +1056,47 @@ body.admin-nav-open {
   margin-top: 0.75rem;
 }
 
+.integration-response-panel {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--admin-border);
+}
+
+.integration-response-panel h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.9375rem;
+}
+
+.integration-response-block {
+  margin-top: 0.75rem;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.integration-response-block summary {
+  cursor: pointer;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--admin-text);
+  background: #f8fafc;
+}
+
+.integration-response-code {
+  margin: 0;
+  padding: 1rem;
+  max-height: 360px;
+  overflow: auto;
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
 .settings-form {
   display: flex;
   flex-direction: column;

@@ -84,7 +84,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($section === 'integrations_test') {
         $result = testApifyConnection();
-        recordApifyConnectionTest($result['success'], $result['success'] ? $result['message'] : $result['error']);
+        recordApifyConnectionTest(
+            $result['success'],
+            $result['success'] ? $result['message'] : $result['error'],
+            $result['response'] ?? null
+        );
         if ($result['success']) {
             flashSet('success', $result['message']);
         } else {
@@ -103,6 +107,8 @@ $apifyLastSyncCount = (int) ($settings['apify_last_sync_count'] ?? 0);
 $apifyLastTestAt = trim($settings['apify_last_test_at'] ?? '');
 $apifyLastTestStatus = trim($settings['apify_last_test_status'] ?? '');
 $apifyLastTestMessage = trim($settings['apify_last_test_message'] ?? '');
+$apifyTestResponse = formatApifyResponseForDisplay(getApifyResponseLog('test'));
+$apifySyncResponse = formatApifyResponseForDisplay(getApifyResponseLog('sync'));
 
 $pageTitle = 'Settings — ' . siteName() . ' Admin';
 $activePage = 'settings';
@@ -364,6 +370,27 @@ require_once __DIR__ . '/../../includes/admin/layout-start.php';
             <button type="submit" class="btn-sm btn-sm--ghost" id="apifyTestBtn" <?= apifyIntegrationConfigured() ? '' : 'disabled' ?>>Test Apify connection</button>
         </form>
         <p class="integration-meta" id="apifyTestHint">Verifies your saved token with Apify.</p>
+
+        <?php if ($apifyTestResponse !== '' || $apifySyncResponse !== ''): ?>
+        <div class="integration-response-panel">
+            <h3>API response log</h3>
+            <p class="form-hint">Latest responses from Apify (tokens are never stored here).</p>
+
+            <?php if ($apifyTestResponse !== ''): ?>
+            <details class="integration-response-block" <?= $apifyLastTestStatus === 'success' ? 'open' : '' ?>>
+                <summary>Connection test response</summary>
+                <pre class="integration-response-code"><?= htmlspecialchars($apifyTestResponse) ?></pre>
+            </details>
+            <?php endif; ?>
+
+            <?php if ($apifySyncResponse !== ''): ?>
+            <details class="integration-response-block" open>
+                <summary>Last sync response</summary>
+                <pre class="integration-response-code"><?= htmlspecialchars($apifySyncResponse) ?></pre>
+            </details>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
     </section>
 </div>
 

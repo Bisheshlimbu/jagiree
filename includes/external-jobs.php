@@ -369,6 +369,8 @@ function buildApifySyncResponseLog(
         'dataset_preview' => $preview,
     ];
 }
+
+function resolveLinkedInSearchUrl(): string
 {
     $customUrl = trim(getSiteSetting('apify_linkedin_search_url'));
     if ($customUrl !== '' && str_starts_with($customUrl, 'https://www.linkedin.com/jobs/search')) {
@@ -395,13 +397,14 @@ function syncLinkedInJobsFromApify(): array
     $actorId = apifyActorApiId(getApifyActorId());
     $limit = max(1, min(500, (int) getSiteSetting('apify_job_limit', '20')));
     $searchUrl = resolveLinkedInSearchUrl();
-
-    $runUrl = 'https://api.apify.com/v2/acts/' . rawurlencode($actorId) . '/runs?token=' . rawurlencode($token);
-    $runResponse = apifyHttpRequest('POST', $runUrl, [
+    $actorInput = [
         'urls' => [$searchUrl],
         'count' => $limit,
         'scrapeCompany' => true,
-    ]);
+    ];
+
+    $runUrl = 'https://api.apify.com/v2/acts/' . rawurlencode($actorId) . '/runs?token=' . rawurlencode($token);
+    $runResponse = apifyHttpRequest('POST', $runUrl, $actorInput);
 
     if ($runResponse === null) {
         return ['success' => false, 'error' => 'Could not start Apify actor run. Check PHP curl and your token.'];
@@ -430,6 +433,25 @@ function syncLinkedInJobsFromApify(): array
 
     $items = fetchApifyDatasetItems($token, $datasetId);
     if ($items === []) {
+        saveApifyResponseLog('sync', [
+            'synced_at' => date('Y-m-d H:i:s'),
+            'search_url' => $searchUrl,
+            'actor_input' => $actorInput,
+            'run' => [
+                'id' => $runData['id'] ?? $runId,
+                'status' => $runData['status'] ?? null,
+                'dataset_id' => $datasetId,
+            ],
+            'summary' => [
+                'items_received' => 0,
+                'inserted' => 0,
+                'updated' => 0,
+                'skipped' => 0,
+            ],
+            'dataset_preview' => [],
+            'error' => 'Dataset was empty.',
+        ]);
+
         return [
             'success' => false,
             'error' => 'Apify returned no jobs. Try a custom LinkedIn search URL that works in Apify Console (Nepal searches often return fewer results).',
@@ -465,14 +487,37 @@ function syncLinkedInJobsFromApify(): array
     $processed = $inserted + $updated;
     if ($processed === 0) {
         $sampleKeys = is_array($items[0] ?? null) ? implode(', ', array_slice(array_keys($items[0]), 0, 8)) : 'unknown';
+        saveApifyResponseLog('sync', buildApifySyncResponseLog(
+            $searchUrl,
+            $limit,
+            $actorInput,
+            $runResponse,
+            $runData,
+            $items,
+            $inserted,
+            $updated,
+            $skipped
+        ) + ['error' => 'No rows could be imported. Sample fields: ' . $sampleKeys]);
 
         return [
             'success' => false,
             'error' => 'Apify returned ' . count($items) . ' row(s) but none could be imported. Sample fields: ' . $sampleKeys,
         ];
     }
+
     saveSiteSetting('apify_last_sync_at', date('Y-m-d H:i:s'));
     saveSiteSetting('apify_last_sync_count', (string) $processed);
+    saveApifyResponseLog('sync', buildApifySyncResponseLog(
+        $searchUrl,
+        $limit,
+        $actorInput,
+        $runResponse,
+        $runData,
+        $items,
+        $inserted,
+        $updated,
+        $skipped
+    ));
 
     return [
         'success' => true,
