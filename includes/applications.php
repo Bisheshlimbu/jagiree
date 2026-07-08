@@ -339,13 +339,22 @@ function applyToJob(int $seekerId, int $jobId, int $matchScore = 0, string $cove
     }
 
     $stmt = db()->prepare(
-        "SELECT id, employer_id, title, skills, status FROM jobs WHERE id = :id AND status = 'approved' LIMIT 1"
+        "SELECT id, employer_id, title, skills, status, source, external_url FROM jobs WHERE id = :id AND status = 'approved' LIMIT 1"
     );
     $stmt->execute(['id' => $jobId]);
     $job = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if (!$job) {
         return ['success' => false, 'error' => 'This job is no longer available.'];
+    }
+
+    if (jobIsExternal($job)) {
+        return [
+            'success' => false,
+            'error' => 'This job must be applied on LinkedIn.',
+            'external_url' => trim($job['external_url'] ?? '') ?: null,
+            'is_external' => true,
+        ];
     }
 
     if ($cvFile && ($cvFile['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE) {

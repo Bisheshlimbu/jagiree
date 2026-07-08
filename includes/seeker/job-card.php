@@ -14,6 +14,9 @@ $jobCardCompact = !empty($jobCardCompact);
         <?php require __DIR__ . '/job-logo.php'; ?>
         <div class="job-card-title-block">
             <h3><a href="<?= htmlspecialchars($jobViewUrl) ?>"><?= htmlspecialchars($job['title'] ?? '') ?></a></h3>
+            <?php if (!empty($job['is_external'])): ?>
+                <span class="job-source-badge"><?= htmlspecialchars($job['source_label'] ?? 'LinkedIn') ?></span>
+            <?php endif; ?>
             <?php require __DIR__ . '/job-company-line.php'; ?>
         </div>
         <?php if (!$jobCardCompact): ?>
@@ -63,14 +66,18 @@ $jobCardCompact = !empty($jobCardCompact);
         <?php endif; ?>
         <?php if (!$jobCardCompact): ?>
         <div class="job-card-actions">
-            <button
-                type="button"
-                class="btn-apply<?= !empty($job['applied']) ? ' is-applied' : '' ?>"
-                data-apply-job="<?= $jobId ?>"
-                data-job-title="<?= htmlspecialchars($job['title'] ?? '', ENT_QUOTES) ?>"
-                data-job-company="<?= htmlspecialchars($job['company'] ?? '', ENT_QUOTES) ?>"
-                <?= !empty($job['applied']) ? 'disabled' : '' ?>
-            ><?= !empty($job['applied']) ? 'Applied' : 'Easy Apply' ?></button>
+            <?php if (!empty($job['is_external']) && !empty($job['external_url'])): ?>
+                <a href="<?= htmlspecialchars($job['external_url']) ?>" class="btn-apply btn-apply--external" target="_blank" rel="noopener">Apply on LinkedIn</a>
+            <?php else: ?>
+                <button
+                    type="button"
+                    class="btn-apply<?= !empty($job['applied']) ? ' is-applied' : '' ?>"
+                    data-apply-job="<?= $jobId ?>"
+                    data-job-title="<?= htmlspecialchars($job['title'] ?? '', ENT_QUOTES) ?>"
+                    data-job-company="<?= htmlspecialchars($job['company'] ?? '', ENT_QUOTES) ?>"
+                    <?= !empty($job['applied']) ? 'disabled' : '' ?>
+                ><?= !empty($job['applied']) ? 'Applied' : 'Easy Apply' ?></button>
+            <?php endif; ?>
             <a href="<?= htmlspecialchars($jobViewUrl) ?>" class="btn-view">View</a>
         </div>
         <?php endif; ?>

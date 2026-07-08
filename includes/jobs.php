@@ -41,10 +41,43 @@ function ensureJobsSchema(): void
         $pdo->exec("ALTER TABLE jobs ADD COLUMN created_by TEXT NOT NULL DEFAULT 'admin'");
     }
 
+    if (!in_array('source', $columns, true)) {
+        $pdo->exec("ALTER TABLE jobs ADD COLUMN source TEXT NOT NULL DEFAULT 'employer'");
+    }
+
+    if (!in_array('external_id', $columns, true)) {
+        $pdo->exec('ALTER TABLE jobs ADD COLUMN external_id TEXT NULL');
+    }
+
+    if (!in_array('external_url', $columns, true)) {
+        $pdo->exec('ALTER TABLE jobs ADD COLUMN external_url TEXT NULL');
+    }
+
+    if (!in_array('synced_at', $columns, true)) {
+        $pdo->exec('ALTER TABLE jobs ADD COLUMN synced_at TEXT NULL');
+    }
+
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs (status)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs (created_at)');
+    $pdo->exec('CREATE INDEX IF NOT EXISTS idx_jobs_source ON jobs (source)');
+    $pdo->exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_jobs_external_source ON jobs (source, external_id) WHERE external_id IS NOT NULL');
 
     $checked = true;
+}
+
+function jobIsExternal(array $job): bool
+{
+    return ($job['source'] ?? '') === 'linkedin' || trim($job['external_url'] ?? '') !== '';
+}
+
+function jobSourceLabel(?string $source): string
+{
+    return match ($source) {
+        'linkedin' => 'LinkedIn',
+        'admin' => 'Jagiree',
+        'employer' => 'Jagiree',
+        default => 'Jagiree',
+    };
 }
 
 function jobStatusLabel(string $status): string

@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS jobs (
   description TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_by TEXT NOT NULL DEFAULT 'admin' CHECK (created_by IN ('admin', 'employer')),
+  source TEXT NOT NULL DEFAULT 'employer',
+  external_id TEXT NULL,
+  external_url TEXT NULL,
+  synced_at TEXT NULL,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (employer_id) REFERENCES users(id) ON DELETE SET NULL
 );

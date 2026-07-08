@@ -114,13 +114,14 @@ function formatSeekerJobCard(array $job, array $seekerSkills = [], array $applie
     $hasLogo = userHasAvatar($employerUser);
 
     $employerId = (int) ($job['employer_id'] ?? 0);
+    $isExternal = jobIsExternal($job);
 
     return [
         'id' => (int) $job['id'],
         'title' => $job['title'],
         'company' => $company,
         'employer_id' => $employerId,
-        'employer_url' => $employerId > 0 ? '/seeker/employer.php?id=' . $employerId : null,
+        'employer_url' => !$isExternal && $employerId > 0 ? '/seeker/employer.php?id=' . $employerId : null,
         'location' => trim($job['location'] ?? '') ?: 'Location not set',
         'salary' => trim($job['salary'] ?? '') ?: 'Negotiable',
         'type' => formatSeekerJobType($job['job_type'] ?? null, $job['location'] ?? null),
@@ -132,7 +133,11 @@ function formatSeekerJobCard(array $job, array $seekerSkills = [], array $applie
         'logo_url' => $hasLogo ? userAvatarUrl($employerUser) : null,
         'has_logo' => $hasLogo,
         'saved' => false,
-        'applied' => in_array((int) $job['id'], $appliedJobIds, true),
+        'applied' => !$isExternal && in_array((int) $job['id'], $appliedJobIds, true),
+        'is_external' => $isExternal,
+        'external_url' => trim($job['external_url'] ?? '') ?: null,
+        'source' => $job['source'] ?? 'employer',
+        'source_label' => jobSourceLabel($job['source'] ?? 'employer'),
     ];
 }
 
@@ -163,15 +168,21 @@ function sortSeekerJobCards(array $jobs, string $sort): array
 function fetchSeekerJobs(string $search = '', string $filter = 'all', string $sort = 'match', array $seekerSkills = [], ?int $seekerId = null): array
 {
     ensureJobsSchema();
+    require_once __DIR__ . '/../settings.php';
 
     $appliedJobIds = $seekerId ? seekerAppliedJobIds($seekerId) : [];
 
-    $sql = "SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills, j.description, j.created_at,
+    $sql = "SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills, j.description,
+                   j.created_at, j.source, j.external_url,
                    u.avatar_path AS employer_avatar_path
             FROM jobs j
             LEFT JOIN users u ON u.id = j.employer_id
             WHERE j.status = 'approved'";
     $params = [];
+
+    if (!siteSettingEnabled('apify_show_external_jobs')) {
+        $sql .= " AND COALESCE(j.source, 'employer') != 'linkedin'";
+    }
 
     if ($search !== '') {
         $sql .= ' AND (j.title LIKE :search OR j.company_name LIKE :search OR j.location LIKE :search OR j.skills LIKE :search OR j.description LIKE :search)';
@@ -205,7 +216,8 @@ function fetchApprovedJobForSeeker(int $jobId): ?array
     ensureJobsSchema();
 
     $stmt = db()->prepare(
-        "SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills, j.description, j.created_at,
+        "SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills, j.description,
+                j.created_at, j.source, j.external_url,
                 u.avatar_path AS employer_avatar_path
          FROM jobs j
          LEFT JOIN users u ON u.id = j.employer_id
@@ -268,6 +280,9 @@ function formatSeekerJobForApi(array $job): array
         'match' => (int) ($job['match'] ?? 0),
         'tags' => $job['tags'] ?? [],
         'applied' => !empty($job['applied']),
+        'is_external' => !empty($job['is_external']),
+        'external_url' => $job['external_url'] ?? null,
+        'source_label' => $job['source_label'] ?? 'Jagiree',
         'url' => '/seeker/jobs.php?id=' . (int) ($job['id'] ?? 0),
     ];
 }

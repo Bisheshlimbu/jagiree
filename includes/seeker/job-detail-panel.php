@@ -16,6 +16,9 @@ $selectedJobRow = $selectedJobRow ?? [];
             ?>
             <div>
                 <h2><?= htmlspecialchars($selectedJob['title'] ?? '') ?></h2>
+                <?php if (!empty($selectedJob['is_external'])): ?>
+                    <span class="job-source-badge job-source-badge--detail"><?= htmlspecialchars($selectedJob['source_label'] ?? 'LinkedIn') ?></span>
+                <?php endif; ?>
                 <p class="job-detail-company">
                     <?php if (!empty($selectedJob['employer_url'])): ?>
                     <a href="<?= htmlspecialchars($selectedJob['employer_url']) ?>" class="job-card-company-link"><?= htmlspecialchars($selectedJob['company'] ?? '') ?></a>
@@ -51,14 +54,19 @@ $selectedJobRow = $selectedJobRow ?? [];
             <?= (int) $selectedJob['match'] ?>% Match
         </span>
         <?php endif; ?>
-        <button
-            type="button"
-            class="btn-apply<?= !empty($selectedJob['applied']) ? ' is-applied' : '' ?>"
-            data-apply-job="<?= (int) ($selectedJob['id'] ?? 0) ?>"
-            data-job-title="<?= htmlspecialchars($selectedJob['title'] ?? '', ENT_QUOTES) ?>"
-            data-job-company="<?= htmlspecialchars($selectedJob['company'] ?? '', ENT_QUOTES) ?>"
-            <?= !empty($selectedJob['applied']) ? 'disabled' : '' ?>
-        ><?= !empty($selectedJob['applied']) ? 'Applied' : 'Easy Apply' ?></button>
+        <?php if (!empty($selectedJob['is_external']) && !empty($selectedJob['external_url'])): ?>
+            <a href="<?= htmlspecialchars($selectedJob['external_url']) ?>" class="btn-apply btn-apply--external" target="_blank" rel="noopener">Apply on LinkedIn</a>
+            <p class="job-external-note">You'll complete your application on LinkedIn. Jagiree doesn't receive it.</p>
+        <?php else: ?>
+            <button
+                type="button"
+                class="btn-apply<?= !empty($selectedJob['applied']) ? ' is-applied' : '' ?>"
+                data-apply-job="<?= (int) ($selectedJob['id'] ?? 0) ?>"
+                data-job-title="<?= htmlspecialchars($selectedJob['title'] ?? '', ENT_QUOTES) ?>"
+                data-job-company="<?= htmlspecialchars($selectedJob['company'] ?? '', ENT_QUOTES) ?>"
+                <?= !empty($selectedJob['applied']) ? 'disabled' : '' ?>
+            ><?= !empty($selectedJob['applied']) ? 'Applied' : 'Easy Apply' ?></button>
+        <?php endif; ?>
         <button type="button" class="job-save-btn" aria-label="Save job">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
