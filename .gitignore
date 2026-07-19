@@ -5,3 +5,7 @@ public/assets/uploads/avatars/*
 !public/assets/uploads/avatars/.gitkeep
 public/assets/uploads/site/*
 !public/assets/uploads/site/.gitkeep
+python/.venv/
+__pycache__/
+*.pyc
+.DS_Store

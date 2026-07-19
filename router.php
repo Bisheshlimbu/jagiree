@@ -8,9 +8,16 @@ $uri = urldecode(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH));
 $publicDir = __DIR__ . '/public';
 $file = $publicDir . $uri;
 
-// Serve static assets from /public
+// Serve static assets from /public (never require() binary files as PHP)
 if ($uri !== '/' && file_exists($file) && !is_dir($file)) {
-    $ext = pathinfo($file, PATHINFO_EXTENSION);
+    $ext = strtolower(pathinfo($file, PATHINFO_EXTENSION));
+
+    // Only PHP under public/ should be executed
+    if ($ext === 'php') {
+        require $file;
+        return true;
+    }
+
     $mimeTypes = [
         'css'  => 'text/css',
         'js'   => 'application/javascript',
@@ -20,13 +27,23 @@ if ($uri !== '/' && file_exists($file) && !is_dir($file)) {
         'jpeg' => 'image/jpeg',
         'webp' => 'image/webp',
         'ico'  => 'image/x-icon',
+        'pdf'  => 'application/pdf',
+        'doc'  => 'application/msword',
+        'docx' => 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'json' => 'application/json',
+        'txt'  => 'text/plain',
+        'woff' => 'font/woff',
+        'woff2'=> 'font/woff2',
     ];
 
-    if (isset($mimeTypes[$ext])) {
-        header('Content-Type: ' . $mimeTypes[$ext]);
-        readfile($file);
-        return true;
+    $mime = $mimeTypes[$ext] ?? 'application/octet-stream';
+    header('Content-Type: ' . $mime);
+    header('Content-Length: ' . (string) filesize($file));
+    if (in_array($ext, ['pdf', 'doc', 'docx'], true)) {
+        header('Content-Disposition: inline; filename="' . basename($file) . '"');
     }
+    readfile($file);
+    return true;
 }
 
 // Route PHP pages from /public
@@ -39,7 +56,7 @@ if ($uri !== '/' && is_dir($file)) {
 }
 
 $phpFile = $publicDir . ($uri === '/' ? '/index.php' : $uri);
-if (file_exists($phpFile) && !is_dir($phpFile)) {
+if (file_exists($phpFile) && !is_dir($phpFile) && str_ends_with(strtolower($phpFile), '.php')) {
     require $phpFile;
     return true;
 }

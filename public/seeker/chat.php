@@ -3,6 +3,7 @@ require_once __DIR__ . '/../../includes/auth.php';
 require_once __DIR__ . '/../../includes/seeker/profile.php';
 require_once __DIR__ . '/../../includes/seeker/jobs.php';
 require_once __DIR__ . '/../../includes/applications.php';
+require_once __DIR__ . '/../../includes/site-brand.php';
 
 requireRole(ROLE_SEEKER);
 
@@ -17,13 +18,29 @@ $pageTitle = 'AI Assistant — Jagiree';
 $activePage = 'chat';
 $bodyClass = 'seeker-body seeker-body--chat';
 $extraScripts = ['assets/js/job-apply.js', 'assets/js/chat.js'];
+$siteLogoUrl = siteLogoUrl();
+$chatSiteName = siteName();
+$chatLogoLetter = mb_strtoupper(mb_substr($chatSiteName, 0, 1));
+
+$chatBotAvatarHtml = static function (string $class) use ($siteLogoUrl, $chatLogoLetter): string {
+    if ($siteLogoUrl) {
+        return '<span class="' . htmlspecialchars($class) . ' ' . htmlspecialchars($class) . '--logo" aria-hidden="true">'
+            . '<img src="' . htmlspecialchars($siteLogoUrl) . '" alt="">'
+            . '</span>';
+    }
+
+    return '<span class="' . htmlspecialchars($class) . '" aria-hidden="true">'
+        . htmlspecialchars($chatLogoLetter)
+        . '</span>';
+};
+
 require_once __DIR__ . '/../../includes/seeker/layout-start.php';
 ?>
 
 <div class="chat-layout">
     <aside class="chat-sidebar">
         <div class="chat-intro-card">
-            <span class="chat-intro-icon" aria-hidden="true">🤖</span>
+            <?= $chatBotAvatarHtml('chat-intro-icon') ?>
             <div>
                 <h2>Jagiree AI Assistant</h2>
                 <p>Ask about jobs or upload CV for recommendations</p>
@@ -65,7 +82,7 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
     <section class="chat-window" id="chatWindow">
         <header class="chat-header">
             <div class="chat-header-bot">
-                <span class="chat-bot-avatar">🤖</span>
+                <?= $chatBotAvatarHtml('chat-bot-avatar') ?>
                 <div>
                     <strong>Jagiree AI</strong>
                     <span class="chat-status"><span class="status-online"></span> Online · Profile-aware matching</span>
@@ -78,17 +95,17 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
 
         <div class="chat-messages" id="chatMessages" role="log" aria-live="polite">
             <div class="message message--bot">
-                <span class="message-avatar">🤖</span>
+                <?= $chatBotAvatarHtml('message-avatar') ?>
                 <div class="message-bubble">
                     <p>Hi <?= htmlspecialchars($seekerName) ?>! I'm your Jagiree AI Assistant.</p>
-                    <p>I use your <strong>profile skills</strong><?= $cvMeta['has_cv'] ? ' and uploaded CV' : '' ?> to recommend live jobs from the platform.</p>
+                    <p>I can explain the platform, Easy Apply vs LinkedIn jobs, and recommend roles with <strong>NLP</strong> (CV text + TF-IDF).</p>
                     <ul>
-                        <li>Get personalized job recommendations</li>
-                        <li>Upload or update your CV (saved to profile)</li>
-                        <li>Learn how Easy Apply works</li>
+                        <li>Ask how Jagiree or applying works</li>
+                        <li>Upload a CV for NLP skill extraction</li>
+                        <li>Get NLP job recommendations</li>
                     </ul>
                     <?php if (!$cvMeta['has_cv']): ?>
-                    <p>Upload your CV to unlock better matches and apply to jobs in one click.</p>
+                    <p>Upload your CV to unlock Easy Apply and NLP matching.</p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -127,6 +144,9 @@ window.chatSeekerConfig = <?= json_encode([
     'cvUpdatedLabel' => $cvMeta['updated_label'],
     'skills' => $profile['skill_list'] ?? [],
     'profileCvUrl' => '/seeker/profile.php?tab=skills',
+    'siteLogoUrl' => $siteLogoUrl,
+    'siteName' => $chatSiteName,
+    'siteLogoLetter' => $chatLogoLetter,
 ], JSON_UNESCAPED_SLASHES) ?>;
 window.seekerHasCv = <?= json_encode($seekerHasCv) ?>;
 window.seekerProfileCvUrl = <?= json_encode('/seeker/profile.php?tab=skills') ?>;

@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS users (
   open_to_work INTEGER NOT NULL DEFAULT 0,
   cv_path TEXT NULL,
   cv_updated_at TEXT NULL,
+  cv_parsed_text TEXT NULL,
+  cv_parsed_at TEXT NULL,
+  cv_titles TEXT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'employer', 'seeker')),
   status TEXT NOT NULL DEFAULT 'verified' CHECK (status IN ('verified', 'pending')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP

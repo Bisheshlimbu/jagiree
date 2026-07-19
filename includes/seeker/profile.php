@@ -29,6 +29,9 @@ function ensureSeekerProfileSchema(): void
         'open_to_work' => 'ALTER TABLE users ADD COLUMN open_to_work INTEGER NOT NULL DEFAULT 0',
         'cv_path' => 'ALTER TABLE users ADD COLUMN cv_path TEXT NULL',
         'cv_updated_at' => 'ALTER TABLE users ADD COLUMN cv_updated_at TEXT NULL',
+        'cv_parsed_text' => 'ALTER TABLE users ADD COLUMN cv_parsed_text TEXT NULL',
+        'cv_parsed_at' => 'ALTER TABLE users ADD COLUMN cv_parsed_at TEXT NULL',
+        'cv_titles' => 'ALTER TABLE users ADD COLUMN cv_titles TEXT NULL',
     ];
 
     foreach ($userColumns as $column => $sql) {
@@ -158,7 +161,7 @@ function fetchSeekerProfile(int $userId): ?array
 
     $stmt = db()->prepare(
         "SELECT id, username, email, full_name, phone, headline, about, skills, location,
-                open_to_work, avatar_path, cv_path, cv_updated_at, created_at
+                open_to_work, avatar_path, cv_path, cv_updated_at, cv_parsed_text, cv_parsed_at, cv_titles, created_at
          FROM users
          WHERE id = :id AND role = 'seeker'
          LIMIT 1"
@@ -172,6 +175,7 @@ function fetchSeekerProfile(int $userId): ?array
 
     $profile['open_to_work'] = (int) ($profile['open_to_work'] ?? 0);
     $profile['skill_list'] = parseSkillsList($profile['skills'] ?? null);
+    $profile['title_list'] = parseSkillsList($profile['cv_titles'] ?? null);
 
     return $profile;
 }
@@ -221,6 +225,23 @@ function removeSeekerCvFile(?string $path): void
     $fullPath = appPublicPath(ltrim($path, '/'));
     if (is_file($fullPath)) {
         unlink($fullPath);
+    }
+}
+
+/**
+ * Clear NLP fields that belong to the uploaded CV (not profile skills).
+ */
+function clearSeekerCvParseData(int $userId): void
+{
+    ensureSeekerProfileSchema();
+
+    try {
+        db()->prepare(
+            "UPDATE users SET cv_parsed_text = NULL, cv_parsed_at = NULL, cv_titles = NULL
+             WHERE id = :id AND role = 'seeker'"
+        )->execute(['id' => $userId]);
+    } catch (PDOException) {
+        // Best-effort cleanup; profile save may still succeed.
     }
 }
 
@@ -374,14 +395,92 @@ function uploadSeekerCv(int $userId, array $file): array
         return ['success' => false, 'error' => 'Could not save CV. Please try again.'];
     }
 
+    $nlpMeta = applyNlpParseToSeekerCv($userId, (string) $cvResult['path']);
+
     $freshProfile = fetchSeekerProfile($userId) ?? $profile;
     $cvMeta = seekerCvMeta($freshProfile);
 
+    $message = 'CV saved to your profile. It will be used for Easy Apply and AI recommendations.';
+    if (!empty($nlpMeta['success']) && !empty($nlpMeta['skills'])) {
+        $message = 'CV saved and analyzed with NLP. Extracted skills: ' . implode(', ', array_slice($nlpMeta['skills'], 0, 8)) . '.';
+    } elseif (!empty($nlpMeta['offline'])) {
+        $message = 'CV saved. NLP service is offline — start it to extract skills from the PDF.';
+    } elseif (!empty($nlpMeta['error'])) {
+        $message = 'CV saved, but NLP could not parse it: ' . $nlpMeta['error'];
+    }
+
     return [
         'success' => true,
-        'message' => 'CV saved to your profile. It will be used for Easy Apply and AI recommendations.',
+        'message' => $message,
         'cv' => $cvMeta,
         'skills' => $freshProfile['skill_list'] ?? [],
+        'titles' => $freshProfile['title_list'] ?? [],
+        'nlp' => $nlpMeta,
+    ];
+}
+
+/**
+ * Call Python NLP to parse CV text/skills and store on the seeker profile.
+ */
+function applyNlpParseToSeekerCv(int $userId, string $publicCvPath): array
+{
+    require_once __DIR__ . '/../nlp-client.php';
+
+    $absolute = publicPathToAbsolute($publicCvPath);
+    if ($absolute === null) {
+        return ['success' => false, 'error' => 'CV path is invalid.'];
+    }
+
+    $parsed = nlpParseCvFile($absolute);
+    if (empty($parsed['success'])) {
+        return $parsed;
+    }
+
+    $skills = $parsed['skills'] ?? [];
+    $titles = $parsed['titles'] ?? [];
+    $skillsCsv = implode(', ', $skills);
+    $titlesCsv = implode(', ', $titles);
+    $text = (string) ($parsed['text'] ?? '');
+    $parsedAt = date('c');
+
+    try {
+        // Merge NLP skills with existing profile skills (NLP first).
+        $existing = fetchSeekerProfile($userId);
+        $existingSkills = $existing['skill_list'] ?? [];
+        $merged = [];
+        foreach (array_merge($skills, $existingSkills) as $skill) {
+            $key = mb_strtolower(trim((string) $skill));
+            if ($key === '' || isset($merged[$key])) {
+                continue;
+            }
+            $merged[$key] = trim((string) $skill);
+        }
+        $mergedList = array_values($merged);
+        $skillsCsv = implode(', ', $mergedList);
+
+        db()->prepare(
+            'UPDATE users SET skills = :skills, cv_parsed_text = :cv_parsed_text,
+             cv_parsed_at = :cv_parsed_at, cv_titles = :cv_titles
+             WHERE id = :id AND role = :role'
+        )->execute([
+            'skills' => $skillsCsv !== '' ? $skillsCsv : null,
+            'cv_parsed_text' => $text !== '' ? $text : null,
+            'cv_parsed_at' => $parsedAt,
+            'cv_titles' => $titlesCsv !== '' ? $titlesCsv : null,
+            'id' => $userId,
+            'role' => ROLE_SEEKER,
+        ]);
+    } catch (PDOException) {
+        return ['success' => false, 'error' => 'Parsed CV but could not save NLP results.'];
+    }
+
+    return [
+        'success' => true,
+        'skills' => $mergedList ?? $skills,
+        'titles' => $titles,
+        'engine' => $parsed['engine'] ?? 'nlp',
+        'char_count' => $parsed['char_count'] ?? 0,
+        'text_preview' => $parsed['text_preview'] ?? '',
     ];
 }
 
@@ -450,8 +549,10 @@ function updateSeekerProfile(int $userId, array $data): array
     }
 
     $cvUpdatedAt = $profile['cv_updated_at'] ?? null;
+    $cvRemoved = false;
     if (($cvResult['path'] ?? null) !== ($profile['cv_path'] ?? null)) {
         $cvUpdatedAt = $cvResult['path'] ? date('c') : null;
+        $cvRemoved = $cvResult['path'] === null && !empty($profile['cv_path']);
     }
 
     try {
@@ -481,7 +582,16 @@ function updateSeekerProfile(int $userId, array $data): array
         return ['success' => false, 'error' => 'Could not save profile. Please try again.'];
     }
 
-    return ['success' => true, 'message' => 'Profile saved successfully.'];
+    if ($cvRemoved) {
+        clearSeekerCvParseData($userId);
+    }
+
+    return [
+        'success' => true,
+        'message' => $cvRemoved
+            ? 'Profile saved. CV removed — AI will no longer use CV text for matching (profile skills are unchanged).'
+            : 'Profile saved successfully.',
+    ];
 }
 
 function addSeekerEducation(int $userId, array $data): array

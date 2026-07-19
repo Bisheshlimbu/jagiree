@@ -257,6 +257,47 @@ function getSeekerRecentJobs(int $seekerId, int $limit = 4): array
     return getSeekerRecommendations($seekerId, $limit, 'recent');
 }
 
+/**
+ * Jobs with description text for NLP ranking.
+ */
+function fetchJobsForNlpRanking(int $limit = 80): array
+{
+    ensureJobsSchema();
+    require_once __DIR__ . '/../settings.php';
+
+    $sql = "SELECT j.id, j.company_name, j.title, j.location, j.skills, j.description,
+                   j.source, j.external_url
+            FROM jobs j
+            WHERE j.status = 'approved'";
+
+    if (!siteSettingEnabled('apify_show_external_jobs')) {
+        $sql .= " AND COALESCE(j.source, 'employer') != 'linkedin'";
+    }
+
+    $sql .= ' ORDER BY datetime(j.created_at) DESC, j.id DESC LIMIT ' . max(1, min(200, $limit));
+
+    $rows = db()->query($sql)->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $jobs = [];
+    foreach ($rows as $row) {
+        $isExternal = ($row['source'] ?? '') === 'linkedin' || trim($row['external_url'] ?? '') !== '';
+        $jobs[] = [
+            'id' => (int) $row['id'],
+            'title' => $row['title'] ?? '',
+            'company' => $row['company_name'] ?? '',
+            'company_name' => $row['company_name'] ?? '',
+            'location' => $row['location'] ?? '',
+            'skills' => $row['skills'] ?? '',
+            'description' => $row['description'] ?? '',
+            'is_external' => $isExternal,
+            'external_url' => $row['external_url'] ?? null,
+            'source_label' => jobSourceLabel($row['source'] ?? 'employer'),
+            'url' => '/seeker/jobs.php?id=' . (int) $row['id'],
+        ];
+    }
+
+    return $jobs;
+}
+
 function countSeekerJobMatches(int $seekerId): int
 {
     $profile = fetchSeekerProfile($seekerId);

@@ -28,6 +28,7 @@ const SITE_SETTING_DEFAULTS = [
     'apify_last_test_message' => '',
     'apify_last_test_response' => '',
     'apify_last_sync_response' => '',
+    'nlp_service_url' => 'http://127.0.0.1:8001',
 ];
 
 function ensureSiteSettingsSchema(): void

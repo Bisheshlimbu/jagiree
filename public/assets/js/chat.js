@@ -1,5 +1,6 @@
 /**
- * Jagiree AI Chat — profile-aware recommendations and unified CV upload.
+ * Jagiree AI Chat — Phase 1: server-side normal replies.
+ * Phase 2 will add CV text extraction; Phase 3 NLP matching.
  */
 
 (function () {
@@ -14,22 +15,21 @@
   if (!messagesEl || !form || !input) return;
 
   const config = window.chatSeekerConfig || {};
-  let cachedRecommendations = null;
   let profileSkills = Array.isArray(config.skills) ? [...config.skills] : [];
   let hasCv = Boolean(config.hasCv);
-
-  function normalize(text) {
-    return text.toLowerCase().trim().replace(/[^\w\s]/g, ' ');
-  }
-
-  function matchAny(text, patterns) {
-    return patterns.some((p) => text.includes(p));
-  }
 
   function escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  function botAvatarHtml(className) {
+    if (config.siteLogoUrl) {
+      return `<span class="${className} ${className}--logo" aria-hidden="true"><img src="${escapeHtml(config.siteLogoUrl)}" alt=""></span>`;
+    }
+    const letter = escapeHtml(config.siteLogoLetter || (config.siteName || 'J').charAt(0).toUpperCase());
+    return `<span class="${className}" aria-hidden="true">${letter}</span>`;
   }
 
   function formatText(text) {
@@ -43,7 +43,7 @@
     wrap.className = `message message--${type}`;
 
     if (type === 'bot') {
-      wrap.innerHTML = `<span class="message-avatar">🤖</span><div class="message-bubble">${content.html || `<p>${formatText(content.text)}</p>`}</div>`;
+      wrap.innerHTML = `${botAvatarHtml('message-avatar')}<div class="message-bubble">${content.html || `<p>${formatText(content.text || '')}</p>`}</div>`;
     } else {
       wrap.innerHTML = `<div class="message-bubble message-bubble--user"><p>${escapeHtml(content.text)}</p></div>`;
     }
@@ -56,7 +56,7 @@
     const el = document.createElement('div');
     el.className = 'message message--bot message--typing';
     el.id = 'typingIndicator';
-    el.innerHTML = '<span class="message-avatar">🤖</span><div class="message-bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+    el.innerHTML = `${botAvatarHtml('message-avatar')}<div class="message-bubble"><div class="typing-dots"><span></span><span></span><span></span></div></div>`;
     messagesEl.appendChild(el);
     messagesEl.scrollTop = messagesEl.scrollHeight;
   }
@@ -76,31 +76,6 @@
     }
   }
 
-  async function fetchRecommendations(force = false) {
-    if (!force && cachedRecommendations) {
-      return cachedRecommendations;
-    }
-
-    const response = await fetch('/seeker/api/recommendations.php?limit=5', {
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-    });
-    const data = await response.json();
-
-    if (!data.success) {
-      throw new Error(data.error || 'Could not load recommendations.');
-    }
-
-    cachedRecommendations = data;
-    profileSkills = Array.isArray(data.skills) ? data.skills : profileSkills;
-    hasCv = Boolean(data.has_cv);
-    window.seekerHasCv = hasCv;
-    if (data.cv) {
-      updateCvSidebar(data.cv);
-    }
-
-    return data;
-  }
-
   function buildSkillsHtml(skills) {
     if (!skills || skills.length === 0) {
       return '<p>Add skills on your <a href="/seeker/profile.php?tab=skills">profile</a> to improve match scores.</p>';
@@ -116,76 +91,65 @@
 
     let html = '<p>Here are your <strong>top matched jobs</strong> from live listings:</p><div class="chat-job-list">';
     jobs.forEach((job) => {
+      const badge = job.is_external
+        ? `<span class="chat-job-source">${escapeHtml(job.source_label || 'LinkedIn')}</span>`
+        : '';
+      const applyHint = job.is_external ? 'Apply on LinkedIn' : 'Easy Apply';
       html += `
         <a class="chat-job-item" href="${escapeHtml(job.url)}">
-          <div class="chat-job-match">${job.match}% Match</div>
+          <div class="chat-job-match">${Number(job.match) || 0}% Match</div>
+          ${badge}
           <strong>${escapeHtml(job.title)}</strong>
           <span>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</span>
+          <span class="chat-job-apply-hint">${escapeHtml(applyHint)}</span>
         </a>`;
     });
-    html += '</div><p>Open a job to <strong>Easy Apply</strong> — your profile CV is sent automatically.</p>';
+    html += '</div><p>Jagiree jobs use <strong>Easy Apply</strong>. LinkedIn jobs open on LinkedIn.</p>';
     return html;
   }
 
-  async function buildRecommendationsResponse() {
-    const data = await fetchRecommendations(true);
-    return {
-      html: `${buildSkillsHtml(data.skills)}${buildJobRecommendationsHtml(data.jobs)}`,
-    };
+  function renderBotReply(data) {
+    const parts = [];
+
+    if (data.text) {
+      parts.push(`<p>${formatText(data.text)}</p>`);
+    }
+
+    if (Array.isArray(data.skills) && data.intent === 'recommend') {
+      parts.push(buildSkillsHtml(data.skills));
+    }
+
+    if (Array.isArray(data.jobs) && data.jobs.length > 0) {
+      parts.push(buildJobRecommendationsHtml(data.jobs));
+    }
+
+    return { html: parts.join('') || `<p>${formatText(data.text || 'Okay.')}</p>`, action: data.action || null };
   }
 
-  async function getBotResponse(userText) {
-    const t = normalize(userText);
+  async function askChatApi(message) {
+    const response = await fetch('/seeker/api/chat.php', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({ message }),
+    });
+    const data = await response.json();
 
-    if (matchAny(t, ['hi', 'hello', 'hey', 'namaste', 'good morning', 'good evening'])) {
-      return {
-        text: "Hello! I use your Jagiree profile and CV to recommend real jobs. Ask for recommendations, upload your CV, or learn how Easy Apply works.",
-      };
+    if (!data.success) {
+      throw new Error(data.error || 'Could not get a reply.');
     }
 
-    if (matchAny(t, ['how does', 'how do', 'what is jagiree', 'about jagiree', 'how it work', 'platform'])) {
-      return {
-        text: "Jagiree connects seekers and employers with profile-based matching:\n\n1. Upload your CV once on your profile\n2. Browse jobs ranked by match score\n3. Easy Apply sends your profile + CV to employers\n4. Track applications under Applications\n\nYour CV and chat upload use the same profile file.",
-      };
+    if (Array.isArray(data.skills)) {
+      profileSkills = data.skills;
+    }
+    if (typeof data.has_cv === 'boolean') {
+      hasCv = data.has_cv;
+      window.seekerHasCv = hasCv;
     }
 
-    if (matchAny(t, ['recommend', 'suggestion', 'match me', 'find job', 'find me job', 'best job'])) {
-      return buildRecommendationsResponse();
-    }
-
-    if (matchAny(t, ['upload', 'cv', 'resume', 'curriculum'])) {
-      return {
-        text: hasCv
-          ? "Your CV is saved on your profile. Use the sidebar upload button or the attach icon to replace it. Then ask for job recommendations!"
-          : "Upload your CV using the sidebar button or the attach icon. It saves to your profile and powers Easy Apply plus recommendations.",
-        action: 'highlight-upload',
-      };
-    }
-
-    if (matchAny(t, ['apply', 'application', 'how to apply'])) {
-      return {
-        text: hasCv
-          ? "To apply:\n\n1. Open a job from recommendations or Jobs\n2. Click **Easy Apply**\n3. Your profile and CV are sent to the employer\n4. Track status under **Applications**"
-          : "Before applying, upload your CV on your profile (Skills & CV tab). Then click **Easy Apply** on any job to send your profile package.",
-      };
-    }
-
-    if (matchAny(t, ['skill', 'trending', 'demand', 'popular'])) {
-      const skillsText = profileSkills.length
-        ? `Your profile skills: ${profileSkills.join(', ')}.`
-        : 'Add skills on your profile to improve matches.';
-      return {
-        text: `${skillsText}\n\nIn-demand areas on Jagiree include PHP, React, Figma, UX, and digital marketing.`,
-      };
-    }
-
-    if (matchAny(t, ['thank', 'thanks', 'dhanyabad'])) {
-      return { text: "You're welcome! Ask anytime for job recommendations or CV help." };
-    }
-
-    return {
-      text: "Try asking for job recommendations, uploading your CV, or how Easy Apply works. I use your live profile data!",
-    };
+    return data;
   }
 
   async function sendUserMessage(text) {
@@ -197,11 +161,12 @@
     showTyping();
 
     try {
-      const response = await getBotResponse(trimmed);
+      const data = await askChatApi(trimmed);
       hideTyping();
-      appendMessage('bot', response);
+      const rendered = renderBotReply(data);
+      appendMessage('bot', rendered);
 
-      if (response.action === 'highlight-upload') {
+      if (rendered.action === 'highlight-upload') {
         document.querySelector('.cv-upload-btn')?.classList.add('is-highlighted');
         window.setTimeout(() => document.querySelector('.cv-upload-btn')?.classList.remove('is-highlighted'), 2000);
       }
@@ -251,17 +216,14 @@
         return;
       }
 
-      cachedRecommendations = null;
       updateCvSidebar(data.cv);
       profileSkills = Array.isArray(data.skills) ? data.skills : profileSkills;
 
-      const recData = await fetchRecommendations(true);
       appendMessage('bot', {
         html: `
-          <p>CV saved to your profile: <strong>${escapeHtml(data.cv?.filename || file.name)}</strong></p>
-          <p>It will be used for Easy Apply and job matching.</p>
-          ${buildSkillsHtml(recData.skills)}
-          ${buildJobRecommendationsHtml(recData.jobs)}
+          <p>${escapeHtml(data.message || 'CV saved.')}</p>
+          ${Array.isArray(data.skills) && data.skills.length ? buildSkillsHtml(data.skills) : ''}
+          <p>Ask <strong>Recommend jobs for me</strong> to get NLP-ranked matches.</p>
         `,
       });
     } catch (error) {
@@ -288,7 +250,7 @@
   clearBtn?.addEventListener('click', () => {
     messagesEl.innerHTML = '';
     appendMessage('bot', {
-      text: 'Chat cleared. Ask for recommendations or upload your CV to get started.',
+      text: 'Chat cleared. Ask for recommendations, how to apply, or upload your CV.',
     });
   });
 
