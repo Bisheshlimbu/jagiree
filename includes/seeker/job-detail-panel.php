@@ -10,6 +10,7 @@ $selectedJobRow = $selectedJobRow ?? [];
     <div class="job-detail-panel__header">
         <div class="job-detail-header">
             <?php
+            $job = $selectedJob;
             $logoClass = 'job-card-logo job-card-logo--lg';
             require __DIR__ . '/job-logo.php';
             unset($logoClass);

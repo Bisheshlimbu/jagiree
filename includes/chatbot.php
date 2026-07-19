@@ -1,7 +1,6 @@
 <?php
 /**
- * Seeker chatbot — Phase 1: intent detection + normal replies.
- * Phase 2/3 will add CV text extraction and NLP recommendations.
+ * Seeker chatbot — FAQ-style intent replies + NLP job recommendations.
  */
 
 require_once __DIR__ . '/seeker/jobs.php';
@@ -146,7 +145,7 @@ function generateChatbotReply(int $seekerId, string $message): array
             break;
 
         case 'greeting':
-            $reply['text'] = "Hi {$name}! I can explain how Jagiree works, help with Easy Apply vs LinkedIn jobs, or recommend roles from your profile skills. What would you like?";
+            $reply['text'] = "Hi {$name}! I can explain how Jagiree works, help with Easy Apply vs LinkedIn jobs, or recommend roles from your profile. What would you like?";
             break;
 
         case 'thanks':
@@ -160,7 +159,7 @@ function generateChatbotReply(int $seekerId, string $message): array
                 . "3. **Easy Apply** on Jagiree jobs sends your CV to the employer\n"
                 . "4. **LinkedIn** jobs open on LinkedIn — you apply there\n"
                 . "5. Track Jagiree applications under Applications\n\n"
-                . "I use your profile skills for recommendations. CV text parsing is coming next.";
+                . "Ask me to recommend jobs and I will rank live listings using your skills (and CV text when available).";
             break;
 
         case 'apply':
@@ -192,12 +191,12 @@ function generateChatbotReply(int $seekerId, string $message): array
             $parsedAt = trim((string) ($profile['cv_parsed_at'] ?? ''));
             if ($hasCv && $parsedAt !== '') {
                 $skillLine = $skills !== [] ? implode(', ', array_slice($skills, 0, 10)) : 'none detected yet';
-                $reply['text'] = "Your CV is saved and NLP-parsed.\n\nExtracted skills: {$skillLine}\n\nAsk for recommendations to rank jobs with TF-IDF using your CV text.";
+                $reply['text'] = "Your CV is saved and NLP-parsed.\n\nExtracted skills: {$skillLine}\n\nAsk for recommendations to rank jobs using your CV text and skills.";
             } elseif ($hasCv) {
-                $reply['text'] = "Your CV is saved, but NLP has not parsed it yet. Re-upload the CV while the Python NLP service is running, or ask me to recommend jobs.";
+                $reply['text'] = "Your CV is saved, but NLP has not parsed it yet. Re-upload the CV while the Python NLP service is running, or ask me to recommend jobs from your profile skills.";
                 $reply['action'] = 'highlight-upload';
             } else {
-                $reply['text'] = "Upload a PDF or DOCX (max 5MB) with the sidebar button or the paperclip icon. When the NLP service is running, I extract skills from the file automatically.";
+                $reply['text'] = "Upload a PDF or DOCX (max 5MB) with the sidebar button or the paperclip icon. When the NLP service is running, skills are extracted from the file automatically.";
                 $reply['action'] = 'highlight-upload';
             }
             break;
@@ -222,7 +221,6 @@ function generateChatbotReply(int $seekerId, string $message): array
         case 'recommend':
             require_once __DIR__ . '/nlp-client.php';
 
-            // CV text/titles only apply while a profile CV is on file.
             $cvText = $hasCv ? trim((string) ($profile['cv_parsed_text'] ?? '')) : '';
             $titles = $hasCv ? ($profile['title_list'] ?? []) : [];
 

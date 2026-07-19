@@ -1,6 +1,5 @@
 /**
- * Jagiree AI Chat — Phase 1: server-side normal replies.
- * Phase 2 will add CV text extraction; Phase 3 NLP matching.
+ * Jagiree AI Chat — FAQ-style replies + NLP recommendations.
  */
 
 (function () {
@@ -89,22 +88,48 @@
       return '<p>No live job listings match your profile right now. Check back soon or browse <a href="/seeker/jobs.php">all jobs</a>.</p>';
     }
 
-    let html = '<p>Here are your <strong>top matched jobs</strong> from live listings:</p><div class="chat-job-list">';
+    let html = '<p>Here are your <strong>top matched jobs</strong>:</p><div class="chat-job-list">';
     jobs.forEach((job) => {
-      const badge = job.is_external
-        ? `<span class="chat-job-source">${escapeHtml(job.source_label || 'LinkedIn')}</span>`
-        : '';
-      const applyHint = job.is_external ? 'Apply on LinkedIn' : 'Easy Apply';
+      const isExternal = Boolean(job.is_external);
+      const jobId = Number(job.id) || 0;
+      const viewUrl = job.url || `/seeker/jobs.php?id=${jobId}`;
+      const sourceLabel = escapeHtml(job.source_label || (isExternal ? 'LinkedIn' : 'Jagiree'));
+      const match = Number(job.match) || 0;
+      const matchClass = match >= 40 ? 'is-high' : match >= 20 ? 'is-mid' : 'is-low';
+
+      let applyControl = '';
+      if (isExternal) {
+        const linkedInHref = job.external_url || viewUrl;
+        applyControl = `
+          <a class="chat-job-btn chat-job-btn--linkedin" href="${escapeHtml(linkedInHref)}" target="_blank" rel="noopener">
+            Apply on LinkedIn
+          </a>`;
+      } else if (jobId > 0) {
+        applyControl = `
+          <button
+            type="button"
+            class="chat-job-btn chat-job-btn--apply"
+            data-apply-job="${jobId}"
+            data-job-title="${escapeHtml(job.title || '')}"
+            data-job-company="${escapeHtml(job.company || '')}"
+          >Easy Apply</button>`;
+      }
+
       html += `
-        <a class="chat-job-item" href="${escapeHtml(job.url)}">
-          <div class="chat-job-match">${Number(job.match) || 0}% Match</div>
-          ${badge}
-          <strong>${escapeHtml(job.title)}</strong>
-          <span>${escapeHtml(job.company)} · ${escapeHtml(job.location)}</span>
-          <span class="chat-job-apply-hint">${escapeHtml(applyHint)}</span>
-        </a>`;
+        <article class="chat-job-card${isExternal ? ' chat-job-card--external' : ''}">
+          <div class="chat-job-card__top">
+            <span class="chat-job-source${isExternal ? '' : ' chat-job-source--native'}">${sourceLabel}</span>
+            <span class="chat-job-match ${matchClass}">${match}% Match</span>
+          </div>
+          <h4 class="chat-job-card__title">${escapeHtml(job.title || 'Untitled role')}</h4>
+          <p class="chat-job-card__meta">${escapeHtml(job.company || '')}${job.location ? ` · ${escapeHtml(job.location)}` : ''}</p>
+          <div class="chat-job-card__actions">
+            <a class="chat-job-btn chat-job-btn--view" href="${escapeHtml(viewUrl)}">View</a>
+            ${applyControl}
+          </div>
+        </article>`;
     });
-    html += '</div><p>Jagiree jobs use <strong>Easy Apply</strong>. LinkedIn jobs open on LinkedIn.</p>';
+    html += '</div>';
     return html;
   }
 
@@ -115,7 +140,7 @@
       parts.push(`<p>${formatText(data.text)}</p>`);
     }
 
-    if (Array.isArray(data.skills) && data.intent === 'recommend') {
+    if (Array.isArray(data.skills) && data.intent === 'recommend' && data.skills.length) {
       parts.push(buildSkillsHtml(data.skills));
     }
 

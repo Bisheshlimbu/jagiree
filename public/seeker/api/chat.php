@@ -1,6 +1,6 @@
 <?php
 /**
- * Seeker chatbot API — Phase 1 normal replies.
+ * Seeker chatbot API — FAQ replies + NLP recommendations.
  */
 
 require_once __DIR__ . '/../../../includes/auth.php';

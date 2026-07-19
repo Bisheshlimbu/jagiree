@@ -71,13 +71,11 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
         ?>
         <article class="app-card" data-application-id="<?= (int) $app['id'] ?>">
             <div class="app-card__header">
-                <div class="app-card__brand<?= !empty($app['has_logo']) ? ' app-card__brand--image' : '' ?>">
-                    <?php if (!empty($app['has_logo'])): ?>
+                <?php if (!empty($app['has_logo']) && !empty($app['logo_url'])): ?>
+                <div class="app-card__brand app-card__brand--image">
                     <img src="<?= htmlspecialchars($app['logo_url']) ?>" alt="">
-                    <?php else: ?>
-                    <?= htmlspecialchars($app['logo']) ?>
-                    <?php endif; ?>
                 </div>
+                <?php endif; ?>
                 <div class="app-card__title-block">
                     <h3><a href="/seeker/jobs.php?id=<?= (int) $app['job_id'] ?>"><?= htmlspecialchars($app['title']) ?></a></h3>
                     <p><?= htmlspecialchars($app['company']) ?> &bull; <?= htmlspecialchars($app['location']) ?></p>
