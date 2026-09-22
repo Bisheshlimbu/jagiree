@@ -6,6 +6,7 @@
 require_once __DIR__ . '/database.php';
 require_once __DIR__ . '/jobs.php';
 require_once __DIR__ . '/settings.php';
+require_once __DIR__ . '/helpers.php';
 
 function apifyHttpRequest(string $method, string $url, ?array $body = null): ?array
 {
@@ -18,8 +19,12 @@ function apifyHttpRequest(string $method, string $url, ?array $body = null): ?ar
     $options = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 120,
+        CURLOPT_CONNECTTIMEOUT => 15,
+        CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_CUSTOMREQUEST => strtoupper($method),
         CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_PROXY => '',
+        CURLOPT_NOPROXY => '*',
     ];
 
     if ($body !== null) {
@@ -72,10 +77,53 @@ function buildLinkedInJobsSearchUrl(string $keywords, string $location = ''): st
     }
 
     if ($params === []) {
-        return 'https://www.linkedin.com/jobs/search/';
+        return '';
     }
 
     return 'https://www.linkedin.com/jobs/search/?' . http_build_query($params);
+}
+
+/**
+ * Build actor input matching curious_coder/linkedin-jobs-scraper.
+ *
+ * @return array{0: ?string, 1: array<string, mixed>}
+ */
+function buildApifyLinkedInActorInput(): array
+{
+    $limit = max(10, min(500, (int) getSiteSetting('apify_job_limit', '50')));
+    $customUrl = trim(getSiteSetting('apify_linkedin_search_url'));
+    $keywords = trim(getSiteSetting('apify_job_keywords'));
+    $location = trim(getSiteSetting('apify_job_location'));
+
+    $searchUrl = '';
+    if ($customUrl !== '' && str_starts_with($customUrl, 'https://www.linkedin.com/jobs/search')) {
+        $searchUrl = $customUrl;
+    } else {
+        $searchUrl = buildLinkedInJobsSearchUrl($keywords, $location);
+    }
+
+    if ($searchUrl === '') {
+        return [null, []];
+    }
+
+    $input = [
+        'urls' => [$searchUrl],
+        'scrapeCompany' => true,
+        // Newer actor versions prefer limitPerSource; older ones used count.
+        'limitPerSource' => $limit,
+        'count' => $limit,
+        'autoConvertToAiSearch' => true,
+        'splitByLocation' => false,
+    ];
+
+    return [$searchUrl, $input];
+}
+
+function resolveLinkedInSearchUrl(): string
+{
+    [$searchUrl] = buildApifyLinkedInActorInput();
+
+    return $searchUrl ?? '';
 }
 
 function externalJobPick(array $item, array $keys, string $default = ''): string
@@ -126,6 +174,8 @@ function normalizeLinkedInJobItem(array $item): ?array
     if ($description === '') {
         $description = $title . ' at ' . $company . '.';
     }
+
+    $description = cleanJobDescriptionText($description);
 
     $externalId = externalJobPick($item, ['id', 'jobId', 'job_id', 'linkedinJobId']);
     if ($externalId === '' && $externalUrl !== '') {
@@ -240,27 +290,53 @@ function upsertLinkedInJob(array $job): string
     return 'inserted';
 }
 
-function waitForApifyRun(string $token, string $runId, int $maxSeconds = 300): ?array
+function waitForApifyRun(string $token, string $runId, int $maxSeconds = 300): array
 {
     $deadline = time() + $maxSeconds;
 
     while (time() < $deadline) {
         $url = 'https://api.apify.com/v2/actor-runs/' . rawurlencode($runId) . '?token=' . rawurlencode($token);
         $response = apifyHttpRequest('GET', $url);
-        $status = strtoupper((string) ($response['data']['status'] ?? ''));
 
-        if (in_array($status, ['SUCCEEDED'], true)) {
-            return $response['data'] ?? null;
+        if ($response === null) {
+            sleep(3);
+            continue;
+        }
+
+        if (!empty($response['error'])) {
+            return [
+                'ok' => false,
+                'error' => $response['error']['message'] ?? 'Could not read Apify run status.',
+                'data' => null,
+            ];
+        }
+
+        $status = strtoupper((string) ($response['data']['status'] ?? ''));
+        $data = $response['data'] ?? null;
+
+        if ($status === 'SUCCEEDED') {
+            return ['ok' => true, 'error' => null, 'data' => $data];
         }
 
         if (in_array($status, ['FAILED', 'ABORTED', 'TIMED-OUT'], true)) {
-            return null;
+            $statusMessage = trim((string) ($data['statusMessage'] ?? ''));
+
+            return [
+                'ok' => false,
+                'error' => 'Apify run ' . strtolower($status)
+                    . ($statusMessage !== '' ? ': ' . $statusMessage : '. Check the run log in Apify Console.'),
+                'data' => $data,
+            ];
         }
 
         sleep(3);
     }
 
-    return null;
+    return [
+        'ok' => false,
+        'error' => 'Apify run did not finish in time. Open Apify Console and check the latest run.',
+        'data' => null,
+    ];
 }
 
 function fetchApifyDatasetItems(string $token, string $datasetId): array
@@ -275,7 +351,11 @@ function fetchApifyDatasetItems(string $token, string $datasetId): array
     curl_setopt_array($ch, [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_TIMEOUT => 120,
+        CURLOPT_CONNECTTIMEOUT => 15,
+        CURLOPT_FOLLOWLOCATION => true,
         CURLOPT_HTTPHEADER => ['Accept: application/json'],
+        CURLOPT_PROXY => '',
+        CURLOPT_NOPROXY => '*',
     ]);
     $response = curl_exec($ch);
     curl_close($ch);
@@ -370,19 +450,6 @@ function buildApifySyncResponseLog(
     ];
 }
 
-function resolveLinkedInSearchUrl(): string
-{
-    $customUrl = trim(getSiteSetting('apify_linkedin_search_url'));
-    if ($customUrl !== '' && str_starts_with($customUrl, 'https://www.linkedin.com/jobs/search')) {
-        return $customUrl;
-    }
-
-    $keywords = trim(getSiteSetting('apify_job_keywords'));
-    $location = trim(getSiteSetting('apify_job_location'));
-
-    return buildLinkedInJobsSearchUrl($keywords, $location);
-}
-
 function syncLinkedInJobsFromApify(): array
 {
     if (!siteSettingEnabled('apify_enabled')) {
@@ -393,15 +460,17 @@ function syncLinkedInJobsFromApify(): array
         return ['success' => false, 'error' => 'Save a valid Apify token and actor ID first.'];
     }
 
+    [$searchUrl, $actorInput] = buildApifyLinkedInActorInput();
+    if ($searchUrl === null || $actorInput === []) {
+        return [
+            'success' => false,
+            'error' => 'Add a LinkedIn search URL, or keywords (and optionally location), then Save integration before syncing. A blank search cannot run like your Apify Console test.',
+        ];
+    }
+
     $token = getApifyApiToken();
     $actorId = apifyActorApiId(getApifyActorId());
-    $limit = max(1, min(500, (int) getSiteSetting('apify_job_limit', '20')));
-    $searchUrl = resolveLinkedInSearchUrl();
-    $actorInput = [
-        'urls' => [$searchUrl],
-        'count' => $limit,
-        'scrapeCompany' => true,
-    ];
+    $limit = max(10, min(500, (int) getSiteSetting('apify_job_limit', '50')));
 
     $runUrl = 'https://api.apify.com/v2/acts/' . rawurlencode($actorId) . '/runs?token=' . rawurlencode($token);
     $runResponse = apifyHttpRequest('POST', $runUrl, $actorInput);
@@ -421,11 +490,23 @@ function syncLinkedInJobsFromApify(): array
     }
 
     set_time_limit(360);
-    $runData = waitForApifyRun($token, $runId, 300);
-    if ($runData === null) {
-        return ['success' => false, 'error' => 'Apify run did not finish in time. Check the run in Apify Console.'];
+    $wait = waitForApifyRun($token, $runId, 300);
+    if (empty($wait['ok'])) {
+        saveApifyResponseLog('sync', [
+            'synced_at' => date('Y-m-d H:i:s'),
+            'search_url' => $searchUrl,
+            'actor_input' => $actorInput,
+            'run' => [
+                'id' => $runId,
+                'status' => $wait['data']['status'] ?? null,
+            ],
+            'error' => $wait['error'] ?? 'Apify run failed.',
+        ]);
+
+        return ['success' => false, 'error' => $wait['error'] ?? 'Apify run failed. Check the run in Apify Console.'];
     }
 
+    $runData = $wait['data'] ?? [];
     $datasetId = (string) ($runData['defaultDatasetId'] ?? '');
     if ($datasetId === '') {
         return ['success' => false, 'error' => 'Apify run finished but no dataset was returned.'];
@@ -454,7 +535,7 @@ function syncLinkedInJobsFromApify(): array
 
         return [
             'success' => false,
-            'error' => 'Apify returned no jobs. Try a custom LinkedIn search URL that works in Apify Console (Nepal searches often return fewer results).',
+            'error' => 'Apify returned no jobs for this search. Paste the same LinkedIn URL that worked in Apify Console, then Save and sync again.',
         ];
     }
 
@@ -532,4 +613,55 @@ function syncLinkedInJobsFromApify(): array
         'skipped' => $skipped,
         'total' => $processed,
     ];
+}
+
+/**
+ * Run LinkedIn sync when the admin schedule says it is due.
+ *
+ * @return array{ran: bool, skipped?: bool, reason?: string, success?: bool, message?: string, error?: string}
+ */
+function runScheduledLinkedInSyncIfDue(bool $force = false): array
+{
+    if (!apifyScheduleEnabled() && !$force) {
+        return ['ran' => false, 'skipped' => true, 'reason' => 'Schedule is disabled.'];
+    }
+
+    if (!$force && !apifyScheduledSyncIsDue()) {
+        $next = apifyNextScheduledSyncAt();
+        $when = $next ? date('Y-m-d H:i:s', $next) : 'unknown';
+
+        return ['ran' => false, 'skipped' => true, 'reason' => 'Not due yet. Next sync around ' . $when . '.'];
+    }
+
+    $lockPath = dirname(__DIR__) . '/database/apify-sync.lock';
+    $lockDir = dirname($lockPath);
+    if (!is_dir($lockDir)) {
+        mkdir($lockDir, 0755, true);
+    }
+
+    $lockHandle = fopen($lockPath, 'c+');
+    if ($lockHandle === false) {
+        return ['ran' => false, 'skipped' => true, 'reason' => 'Could not open sync lock file.'];
+    }
+
+    if (!flock($lockHandle, LOCK_EX | LOCK_NB)) {
+        fclose($lockHandle);
+
+        return ['ran' => false, 'skipped' => true, 'reason' => 'Another LinkedIn sync is already running.'];
+    }
+
+    saveSiteSetting('apify_schedule_last_attempt_at', date('Y-m-d H:i:s'));
+
+    try {
+        $result = syncLinkedInJobsFromApify();
+        $summary = !empty($result['success'])
+            ? ($result['message'] ?? 'Sync succeeded.')
+            : ($result['error'] ?? 'Sync failed.');
+        saveSiteSetting('apify_schedule_last_result', $summary);
+
+        return array_merge(['ran' => true], $result);
+    } finally {
+        flock($lockHandle, LOCK_UN);
+        fclose($lockHandle);
+    }
 }

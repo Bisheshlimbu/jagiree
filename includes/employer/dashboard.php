@@ -157,7 +157,7 @@ function getEmployerDashboardData(int $employerId): array
     $newActiveThisWeek = countEmployerJobsSince($employerId, 7, 'approved');
     $totalApplicants = countEmployerApplications($employerId);
     $newApplicantsThisWeek = countEmployerApplications($employerId, 7);
-    $interviewCount = countEmployerApplicationsByStatus($employerId, 'interview');
+    $rejectedCount = countEmployerApplicationsByStatus($employerId, 'rejected');
     $shortlistedCount = countEmployerApplicationsByStatus($employerId, 'review')
         + countEmployerApplicationsByStatus($employerId, 'hired');
 
@@ -185,18 +185,18 @@ function getEmployerDashboardData(int $employerId): array
             'icon' => 'applicants',
         ],
         [
-            'label' => 'Interviews',
-            'value' => (string) $interviewCount,
-            'trend' => $interviewCount > 0 ? 'Scheduled' : 'None scheduled',
-            'trendType' => $interviewCount > 0 ? 'up' : 'neutral',
-            'icon' => 'interviews',
-        ],
-        [
             'label' => 'Shortlisted',
             'value' => (string) $shortlistedCount,
             'trend' => $shortlistedCount > 0 ? 'In review pipeline' : 'Awaiting applicants',
             'trendType' => $shortlistedCount > 0 ? 'up' : 'neutral',
             'icon' => 'shortlisted',
+        ],
+        [
+            'label' => 'Rejected',
+            'value' => (string) $rejectedCount,
+            'trend' => $rejectedCount > 0 ? 'Not selected' : 'None yet',
+            'trendType' => 'neutral',
+            'icon' => 'rejected',
         ],
     ];
 
@@ -207,7 +207,6 @@ function getEmployerDashboardData(int $employerId): array
         'stats' => $stats,
         'applications' => fetchEmployerRecentApplications($employerId, 5),
         'activeJobs' => $activeJobRows,
-        'interviews' => [],
         'insights' => fetchEmployerDashboardInsights($activeJobs, $pendingJobs, $totalJobs, $latestJobTitle),
         'pendingJobs' => $pendingJobs,
     ];

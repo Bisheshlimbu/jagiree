@@ -22,7 +22,7 @@ function ensureApplicationsSchema(): void
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_id INTEGER NOT NULL,
             seeker_id INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT \'applied\' CHECK (status IN (\'applied\', \'review\', \'interview\', \'rejected\', \'hired\', \'completed\')),
+            status TEXT NOT NULL DEFAULT \'applied\' CHECK (status IN (\'applied\', \'review\', \'rejected\', \'hired\')),
             match_score INTEGER NOT NULL DEFAULT 0,
             cv_path TEXT NULL,
             cover_letter TEXT NULL,
@@ -46,47 +46,52 @@ function ensureApplicationsSchema(): void
         $pdo->exec('ALTER TABLE job_applications ADD COLUMN cover_letter TEXT NULL');
     }
 
-    if (!in_array('interview_reply', $columns, true)) {
-        $pdo->exec('ALTER TABLE job_applications ADD COLUMN interview_reply TEXT NULL');
-    }
-
-    if (!in_array('interview_date', $columns, true)) {
-        $pdo->exec('ALTER TABLE job_applications ADD COLUMN interview_date TEXT NULL');
-    }
-
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_job_applications_job ON job_applications (job_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_job_applications_seeker ON job_applications (seeker_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_job_applications_status ON job_applications (status)');
 
-    migrateJobApplicationsCompletedStatus();
-    completePastInterviewApplications();
+    migrateJobApplicationsRemoveInterviewFeature();
 
     $checked = true;
 }
 
-function migrateJobApplicationsCompletedStatus(): void
+/**
+ * Drop interview scheduling columns/statuses from job_applications.
+ */
+function migrateJobApplicationsRemoveInterviewFeature(): void
 {
     require_once __DIR__ . '/settings.php';
 
-    if (getSiteSetting('job_applications_completed_v1') === '1') {
+    if (getSiteSetting('job_applications_no_interview_v1') === '1') {
         return;
     }
 
     $pdo = db();
+    $columns = array_column(
+        $pdo->query('PRAGMA table_info(job_applications)')->fetchAll(PDO::FETCH_ASSOC),
+        'name'
+    );
+
+    // Remap legacy interview/completed rows before rebuilding CHECK constraint.
+    if (in_array('status', $columns, true)) {
+        $pdo->exec(
+            "UPDATE job_applications
+             SET status = 'review'
+             WHERE status IN ('interview', 'completed')"
+        );
+    }
 
     $pdo->exec('PRAGMA foreign_keys = OFF');
 
     $pdo->exec(
-        'CREATE TABLE IF NOT EXISTS job_applications__completed (
+        'CREATE TABLE IF NOT EXISTS job_applications__no_interview (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             job_id INTEGER NOT NULL,
             seeker_id INTEGER NOT NULL,
-            status TEXT NOT NULL DEFAULT \'applied\' CHECK (status IN (\'applied\', \'review\', \'interview\', \'rejected\', \'hired\', \'completed\')),
+            status TEXT NOT NULL DEFAULT \'applied\' CHECK (status IN (\'applied\', \'review\', \'rejected\', \'hired\')),
             match_score INTEGER NOT NULL DEFAULT 0,
             cv_path TEXT NULL,
             cover_letter TEXT NULL,
-            interview_reply TEXT NULL,
-            interview_date TEXT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE,
             FOREIGN KEY (seeker_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -95,18 +100,22 @@ function migrateJobApplicationsCompletedStatus(): void
     );
 
     $pdo->exec(
-        'INSERT INTO job_applications__completed (
-            id, job_id, seeker_id, status, match_score, cv_path, cover_letter,
-            interview_reply, interview_date, created_at
+        'INSERT INTO job_applications__no_interview (
+            id, job_id, seeker_id, status, match_score, cv_path, cover_letter, created_at
          )
          SELECT
-            id, job_id, seeker_id, status, match_score, cv_path, cover_letter,
-            interview_reply, interview_date, created_at
+            id, job_id, seeker_id,
+            CASE
+                WHEN status IN (\'interview\', \'completed\') THEN \'review\'
+                WHEN status IN (\'applied\', \'review\', \'rejected\', \'hired\') THEN status
+                ELSE \'applied\'
+            END,
+            match_score, cv_path, cover_letter, created_at
          FROM job_applications'
     );
 
     $pdo->exec('DROP TABLE job_applications');
-    $pdo->exec('ALTER TABLE job_applications__completed RENAME TO job_applications');
+    $pdo->exec('ALTER TABLE job_applications__no_interview RENAME TO job_applications');
 
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_job_applications_job ON job_applications (job_id)');
     $pdo->exec('CREATE INDEX IF NOT EXISTS idx_job_applications_seeker ON job_applications (seeker_id)');
@@ -114,53 +123,13 @@ function migrateJobApplicationsCompletedStatus(): void
 
     $pdo->exec('PRAGMA foreign_keys = ON');
 
-    saveSiteSetting('job_applications_completed_v1', '1');
-}
-
-function completePastInterviewApplications(): int
-{
-    $stmt = db()->query(
-        "SELECT a.id, a.seeker_id, j.title AS job_title
-         FROM job_applications a
-         INNER JOIN jobs j ON j.id = a.job_id
-         WHERE a.status = 'interview'
-           AND a.interview_date IS NOT NULL
-           AND trim(a.interview_date) != ''
-           AND date(a.interview_date) < date('now')"
-    );
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    if ($rows === []) {
-        return 0;
-    }
-
-    db()->exec(
-        "UPDATE job_applications
-         SET status = 'completed'
-         WHERE status = 'interview'
-           AND interview_date IS NOT NULL
-           AND trim(interview_date) != ''
-           AND date(interview_date) < date('now')"
-    );
-
-    require_once __DIR__ . '/notifications.php';
-    foreach ($rows as $row) {
-        $seekerId = (int) ($row['seeker_id'] ?? 0);
-        $jobTitle = trim($row['job_title'] ?? '') ?: 'your application';
-        if ($seekerId > 0) {
-            notifySeekerInterviewCompleted($seekerId, (int) ($row['id'] ?? 0), $jobTitle);
-        }
-    }
-
-    return count($rows);
+    saveSiteSetting('job_applications_no_interview_v1', '1');
 }
 
 function applicationStatusLabel(string $status): string
 {
     return match ($status) {
         'review' => 'Under Review',
-        'interview' => 'Interview Scheduled',
-        'completed' => 'Completed',
         'rejected' => 'Not Selected',
         'hired' => 'Hired',
         default => 'Applied',
@@ -171,8 +140,6 @@ function applicationStatusClass(string $status): string
 {
     return match ($status) {
         'review' => 'review',
-        'interview' => 'interview',
-        'completed' => 'completed',
         'rejected' => 'rejected',
         'hired' => 'hired',
         default => 'applied',
@@ -232,8 +199,6 @@ function seekerApplicationStatusSummary(int $seekerId): array
     $summary = [
         'applied' => 0,
         'review' => 0,
-        'interview' => 0,
-        'completed' => 0,
         'rejected' => 0,
         'hired' => 0,
         'total' => 0,
@@ -592,11 +557,9 @@ function deleteSeekerApplication(int $seekerId, int $applicationId): array
 function fetchSeekerApplications(int $seekerId): array
 {
     ensureApplicationsSchema();
-    completePastInterviewApplications();
 
     $stmt = db()->prepare(
-        "SELECT a.id, a.job_id, a.status, a.match_score, a.cv_path, a.cover_letter,
-                a.interview_reply, a.interview_date, a.created_at,
+        "SELECT a.id, a.job_id, a.status, a.match_score, a.cv_path, a.cover_letter, a.created_at,
                 j.title, j.company_name, j.location, j.job_type,
                 u.avatar_path AS employer_avatar_path
          FROM job_applications a
@@ -631,9 +594,6 @@ function fetchSeekerApplications(int $seekerId): array
             'has_logo' => $hasLogo,
             'cv_path' => isValidApplicationCvPath($row['cv_path'] ?? null) ? $row['cv_path'] : null,
             'cover_letter' => trim($row['cover_letter'] ?? ''),
-            'interview_reply' => trim($row['interview_reply'] ?? ''),
-            'interview_date' => trim($row['interview_date'] ?? ''),
-            'interview_date_label' => formatApplicationInterviewDate($row['interview_date'] ?? null),
             'can_edit' => seekerApplicationEditable($status),
             'can_delete' => seekerApplicationDeletable($status),
         ];
@@ -646,30 +606,16 @@ function dbStatusToEmployerStatus(string $status): string
 {
     return match ($status) {
         'applied' => 'new',
-        'interview' => 'interviewing',
-        'review' => 'review',
+        'review', 'hired' => 'review',
         'rejected' => 'rejected',
-        'completed' => 'completed',
-        'hired' => 'interviewing',
         default => 'new',
     };
-}
-
-function employerApplicationStatusLocked(string $employerStatus): bool
-{
-    return $employerStatus === 'completed';
-}
-
-function employerApplicationStatusLockedByDb(string $dbStatus): bool
-{
-    return $dbStatus === 'completed';
 }
 
 function employerStatusToDbStatus(string $employerStatus): ?string
 {
     return match ($employerStatus) {
         'new' => 'applied',
-        'interviewing' => 'interview',
         'review' => 'review',
         'rejected' => 'rejected',
         default => null,
@@ -681,72 +627,18 @@ function employerApplicationStatusOptions(): array
     return [
         'new' => 'New',
         'review' => 'In review',
-        'interviewing' => 'Interviewing',
         'rejected' => 'Reject',
     ];
 }
 
 function employerApplicationStatusLabel(string $employerStatus): string
 {
-    return match ($employerStatus) {
-        'completed' => 'Completed',
-        default => employerApplicationStatusOptions()[$employerStatus] ?? ucfirst($employerStatus),
-    };
+    return employerApplicationStatusOptions()[$employerStatus] ?? ucfirst($employerStatus);
 }
 
 function employerApplicationFilterStatusOptions(): array
 {
-    return employerApplicationStatusOptions() + ['completed' => 'Completed'];
-}
-
-function formatApplicationInterviewDate(?string $date): ?string
-{
-    $date = trim((string) $date);
-    if ($date === '') {
-        return null;
-    }
-
-    $time = strtotime($date);
-    if ($time === false) {
-        return null;
-    }
-
-    return date('l, F j, Y', $time);
-}
-
-function validateInterviewScheduleInput(string $replyMessage, ?string $interviewDate): array
-{
-    $replyMessage = trim($replyMessage);
-    if ($replyMessage === '') {
-        return ['success' => false, 'error' => 'Please add a reply message for the applicant.'];
-    }
-
-    if (mb_strlen($replyMessage) > 2000) {
-        return ['success' => false, 'error' => 'Reply message must be 2000 characters or fewer.'];
-    }
-
-    $interviewDate = trim((string) $interviewDate);
-    if ($interviewDate === '') {
-        return ['success' => false, 'error' => 'Please choose an interview date.'];
-    }
-
-    $parsed = DateTime::createFromFormat('Y-m-d', $interviewDate);
-    $errors = DateTime::getLastErrors();
-    if (!$parsed || ($errors['warning_count'] ?? 0) > 0 || ($errors['error_count'] ?? 0) > 0) {
-        return ['success' => false, 'error' => 'Please choose a valid interview date.'];
-    }
-
-    $parsed->setTime(0, 0, 0);
-    $today = new DateTime('today');
-    if ($parsed < $today) {
-        return ['success' => false, 'error' => 'Interview date cannot be in the past.'];
-    }
-
-    return [
-        'success' => true,
-        'reply_message' => $replyMessage,
-        'interview_date' => $parsed->format('Y-m-d'),
-    ];
+    return employerApplicationStatusOptions();
 }
 
 function formatEmployerApplicantRow(array $row, int $index = 0): array
@@ -776,7 +668,6 @@ function formatEmployerApplicantRow(array $row, int $index = 0): array
         'role' => $row['job_title'] ?? '',
         'status' => $employerStatus,
         'status_label' => employerApplicationStatusLabel($employerStatus),
-        'status_locked' => employerApplicationStatusLocked($employerStatus),
         'match' => (int) ($row['match_score'] ?? 0),
         'date' => formatJobSubmittedAt($row['created_at'] ?? null),
         'cv_path' => isValidApplicationCvPath($row['cv_path'] ?? null) ? $row['cv_path'] : null,
@@ -815,7 +706,6 @@ function fetchEmployerApplicantJobs(int $employerId): array
 function fetchEmployerApplicants(int $employerId, array $filters = []): array
 {
     ensureApplicationsSchema();
-    completePastInterviewApplications();
 
     $jobId = (int) ($filters['job_id'] ?? 0);
     $statusFilter = trim($filters['status'] ?? '');
@@ -838,9 +728,7 @@ function fetchEmployerApplicants(int $employerId, array $filters = []): array
     }
 
     if ($statusFilter !== '') {
-        $dbStatus = $statusFilter === 'completed'
-            ? 'completed'
-            : employerStatusToDbStatus($statusFilter);
+        $dbStatus = employerStatusToDbStatus($statusFilter);
         if ($dbStatus !== null) {
             $sql .= ' AND a.status = :status';
             $params['status'] = $dbStatus;
@@ -872,11 +760,8 @@ function fetchEmployerApplicationDetail(int $employerId, int $applicationId): ?a
         return null;
     }
 
-    completePastInterviewApplications();
-
     $stmt = db()->prepare(
-        "SELECT a.id, a.job_id, a.seeker_id, a.status, a.match_score, a.cv_path, a.cover_letter,
-                a.interview_reply, a.interview_date, a.created_at,
+        "SELECT a.id, a.job_id, a.seeker_id, a.status, a.match_score, a.cv_path, a.cover_letter, a.created_at,
                 j.title AS job_title, j.company_name, j.location AS job_location, j.skills AS job_skills,
                 u.full_name AS seeker_name, u.headline, u.about, u.skills, u.location AS seeker_location,
                 u.avatar_path AS seeker_avatar, u.open_to_work
@@ -907,10 +792,6 @@ function fetchEmployerApplicationDetail(int $employerId, int $applicationId): ?a
             'applied_at' => $row['created_at'] ?? null,
             'cover_letter' => trim($row['cover_letter'] ?? ''),
             'has_cover_letter' => trim($row['cover_letter'] ?? '') !== '',
-            'interview_reply' => trim($row['interview_reply'] ?? ''),
-            'interview_date' => trim($row['interview_date'] ?? ''),
-            'interview_date_label' => formatApplicationInterviewDate($row['interview_date'] ?? null),
-            'status_locked' => employerApplicationStatusLocked($applicant['status'] ?? ''),
         ]),
         'job' => [
             'id' => (int) ($row['job_id'] ?? 0),
@@ -941,13 +822,9 @@ function fetchEmployerApplicationDetail(int $employerId, int $applicationId): ?a
 function updateEmployerApplicationStatus(
     int $employerId,
     int $applicationId,
-    string $employerStatus,
-    string $replyMessage = '',
-    ?string $interviewDate = null
+    string $employerStatus
 ): array {
     ensureApplicationsSchema();
-
-    completePastInterviewApplications();
 
     $dbStatus = employerStatusToDbStatus($employerStatus);
     if ($dbStatus === null) {
@@ -969,23 +846,7 @@ function updateEmployerApplicationStatus(
     }
 
     $currentStatus = $application['current_status'] ?? 'applied';
-    if (employerApplicationStatusLockedByDb($currentStatus)) {
-        return ['success' => false, 'error' => 'Completed applications cannot be changed.'];
-    }
-
-    $interviewReply = null;
-    $interviewDateValue = null;
-
-    if ($employerStatus === 'interviewing') {
-        $validation = validateInterviewScheduleInput($replyMessage, $interviewDate);
-        if (!$validation['success']) {
-            return $validation;
-        }
-        $interviewReply = $validation['reply_message'];
-        $interviewDateValue = $validation['interview_date'];
-    }
-
-    if ($currentStatus === $dbStatus && $employerStatus !== 'interviewing') {
+    if ($currentStatus === $dbStatus) {
         return [
             'success' => true,
             'status' => $employerStatus,
@@ -994,51 +855,22 @@ function updateEmployerApplicationStatus(
         ];
     }
 
-    if ($employerStatus === 'interviewing') {
-        $update = db()->prepare(
-            'UPDATE job_applications
-             SET status = :status, interview_reply = :interview_reply, interview_date = :interview_date
-             WHERE id = :id'
-        );
-        $update->execute([
-            'status' => $dbStatus,
-            'interview_reply' => $interviewReply,
-            'interview_date' => $interviewDateValue,
-            'id' => $applicationId,
-        ]);
-    } else {
-        $update = db()->prepare(
-            'UPDATE job_applications
-             SET status = :status, interview_reply = NULL, interview_date = NULL
-             WHERE id = :id'
-        );
-        $update->execute(['status' => $dbStatus, 'id' => $applicationId]);
-    }
+    $update = db()->prepare(
+        'UPDATE job_applications SET status = :status WHERE id = :id'
+    );
+    $update->execute(['status' => $dbStatus, 'id' => $applicationId]);
 
     require_once __DIR__ . '/notifications.php';
     $seekerId = (int) ($application['seeker_id'] ?? 0);
     $jobTitle = trim($application['job_title'] ?? '') ?: 'a job';
     $statusLabel = employerApplicationStatusLabel($employerStatus);
-
-    if ($employerStatus === 'interviewing' && $interviewDateValue) {
-        notifySeekerInterviewScheduled(
-            $seekerId,
-            $applicationId,
-            $jobTitle,
-            $interviewDateValue,
-            $interviewReply ?? ''
-        );
-    } else {
-        notifySeekerApplicationStatus($seekerId, $applicationId, $jobTitle, $statusLabel);
-    }
+    notifySeekerApplicationStatus($seekerId, $applicationId, $jobTitle, $statusLabel);
 
     return [
         'success' => true,
         'status' => $employerStatus,
         'status_label' => employerApplicationStatusLabel($employerStatus),
-        'message' => $employerStatus === 'interviewing'
-            ? 'Interview scheduled and applicant notified.'
-            : 'Application status updated.',
+        'message' => 'Application status updated.',
     ];
 }
 
@@ -1107,7 +939,6 @@ function countNewJobApplicantsSince(int $jobId, int $days): int
 function fetchEmployerRecentApplications(int $employerId, int $limit = 5): array
 {
     ensureApplicationsSchema();
-    completePastInterviewApplications();
 
     $stmt = db()->prepare(
         "SELECT a.id, a.job_id, a.seeker_id, a.status, a.match_score, a.cv_path, a.cover_letter, a.created_at,

@@ -1,5 +1,7 @@
 /**
  * Jagiree AI Chat — FAQ-style replies + NLP recommendations.
+ * Conversation is kept in sessionStorage for this browser tab only
+ * (survives refresh / in-site navigation; cleared when the tab closes).
  */
 
 (function () {
@@ -16,6 +18,10 @@
   const config = window.chatSeekerConfig || {};
   let profileSkills = Array.isArray(config.skills) ? [...config.skills] : [];
   let hasCv = Boolean(config.hasCv);
+  const storageKey = `jagiree_chat_v1_${config.seekerId || 'guest'}`;
+  const MAX_STORED_MESSAGES = 60;
+  /** @type {{ type: string, text?: string, html?: string }[]} */
+  let conversation = [];
 
   function escapeHtml(str) {
     const div = document.createElement('div');
@@ -37,18 +43,73 @@
       .replace(/\n/g, '<br>');
   }
 
-  function appendMessage(type, content) {
+  function loadConversation() {
+    try {
+      const raw = sessionStorage.getItem(storageKey);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((m) => m && (m.type === 'user' || m.type === 'bot')) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function persistConversation() {
+    try {
+      const trimmed = conversation.slice(-MAX_STORED_MESSAGES);
+      conversation = trimmed;
+      sessionStorage.setItem(storageKey, JSON.stringify(trimmed));
+    } catch (_) {
+      // Quota / private mode — keep chatting without persistence.
+    }
+  }
+
+  function clearConversationStorage() {
+    conversation = [];
+    try {
+      sessionStorage.removeItem(storageKey);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function appendMessage(type, content, options = {}) {
     const wrap = document.createElement('div');
     wrap.className = `message message--${type}`;
 
     if (type === 'bot') {
       wrap.innerHTML = `${botAvatarHtml('message-avatar')}<div class="message-bubble">${content.html || `<p>${formatText(content.text || '')}</p>`}</div>`;
     } else {
-      wrap.innerHTML = `<div class="message-bubble message-bubble--user"><p>${escapeHtml(content.text)}</p></div>`;
+      wrap.innerHTML = `<div class="message-bubble message-bubble--user"><p>${escapeHtml(content.text || '')}</p></div>`;
     }
 
     messagesEl.appendChild(wrap);
     messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    if (!options.skipPersist) {
+      const entry = { type };
+      if (content.html) {
+        entry.html = content.html;
+      } else {
+        entry.text = content.text || '';
+      }
+      conversation.push(entry);
+      persistConversation();
+    }
+  }
+
+  function restoreConversation() {
+    const saved = loadConversation();
+    if (saved.length === 0) {
+      conversation = [];
+      return;
+    }
+
+    conversation = saved;
+    messagesEl.innerHTML = '';
+    saved.forEach((msg) => {
+      appendMessage(msg.type, { text: msg.text, html: msg.html }, { skipPersist: true });
+    });
   }
 
   function showTyping() {
@@ -83,19 +144,27 @@
     return `<div class="chat-tags">${skills.map((skill) => `<span>${escapeHtml(skill)}</span>`).join('')}</div>`;
   }
 
-  function buildJobRecommendationsHtml(jobs) {
+  function buildJobRecommendationsHtml(jobs, matchBasis = 'profile') {
     if (!jobs || jobs.length === 0) {
-      return '<p>No live job listings match your profile right now. Check back soon or browse <a href="/seeker/jobs.php">all jobs</a>.</p>';
+      return '<p>No live job listings match right now. Check back soon or browse <a href="/seeker/jobs.php">all jobs</a>.</p>';
     }
 
-    let html = '<p>Here are your <strong>top matched jobs</strong>:</p><div class="chat-job-list">';
+    const askMode = matchBasis === 'ask';
+    const intro = askMode
+      ? '<p class="chat-jobs-intro">Roles matching your <strong>ask</strong> from live listings:</p>'
+      : '<p class="chat-jobs-intro">Your <strong>top matched jobs</strong> from live listings:</p>';
+    let html = `${intro}<div class="chat-job-list">`;
     jobs.forEach((job) => {
       const isExternal = Boolean(job.is_external);
       const jobId = Number(job.id) || 0;
       const viewUrl = job.url || `/seeker/jobs.php?id=${jobId}`;
       const sourceLabel = escapeHtml(job.source_label || (isExternal ? 'LinkedIn' : 'Jagiree'));
-      const match = Number(job.match) || 0;
-      const matchClass = match >= 40 ? 'is-high' : match >= 20 ? 'is-mid' : 'is-low';
+      const match = job.match == null || job.match === '' ? null : Number(job.match);
+      const showMatch = !askMode && match != null && !Number.isNaN(match);
+      const matchClass = showMatch ? (match >= 40 ? 'is-high' : match >= 20 ? 'is-mid' : 'is-low') : '';
+      const matchBadge = showMatch
+        ? `<span class="chat-job-match ${matchClass}">${match}% Match</span>`
+        : '';
 
       let applyControl = '';
       if (isExternal) {
@@ -119,7 +188,7 @@
         <article class="chat-job-card${isExternal ? ' chat-job-card--external' : ''}">
           <div class="chat-job-card__top">
             <span class="chat-job-source${isExternal ? '' : ' chat-job-source--native'}">${sourceLabel}</span>
-            <span class="chat-job-match ${matchClass}">${match}% Match</span>
+            ${matchBadge}
           </div>
           <h4 class="chat-job-card__title">${escapeHtml(job.title || 'Untitled role')}</h4>
           <p class="chat-job-card__meta">${escapeHtml(job.company || '')}${job.location ? ` · ${escapeHtml(job.location)}` : ''}</p>
@@ -145,7 +214,7 @@
     }
 
     if (Array.isArray(data.jobs) && data.jobs.length > 0) {
-      parts.push(buildJobRecommendationsHtml(data.jobs));
+      parts.push(buildJobRecommendationsHtml(data.jobs, data.match_basis || 'profile'));
     }
 
     return { html: parts.join('') || `<p>${formatText(data.text || 'Okay.')}</p>`, action: data.action || null };
@@ -273,6 +342,7 @@
   });
 
   clearBtn?.addEventListener('click', () => {
+    clearConversationStorage();
     messagesEl.innerHTML = '';
     appendMessage('bot', {
       text: 'Chat cleared. Ask for recommendations, how to apply, or upload your CV.',
@@ -282,5 +352,6 @@
   cvUpload?.addEventListener('change', (e) => uploadCvFile(e.target.files[0]));
   chatAttach?.addEventListener('change', (e) => uploadCvFile(e.target.files[0]));
 
+  restoreConversation();
   input.focus();
 })();

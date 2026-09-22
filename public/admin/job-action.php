@@ -12,6 +12,19 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 
 $jobId = (int) ($_POST['job_id'] ?? 0);
 $action = $_POST['action'] ?? '';
+$page = max(1, (int) ($_POST['page'] ?? 1));
+$redirect = '/admin/jobs.php?page=' . $page;
+
+if ($action === 'delete') {
+    $result = deleteJobByAdmin($jobId);
+    if ($result['success']) {
+        flashSet('success', $result['message']);
+    } else {
+        flashSet('error', $result['error']);
+    }
+    header('Location: ' . $redirect);
+    exit;
+}
 
 $status = match ($action) {
     'approve' => 'approved',
@@ -21,7 +34,7 @@ $status = match ($action) {
 
 if ($status === null) {
     flashSet('error', 'Invalid job action.');
-    header('Location: /admin/jobs.php');
+    header('Location: ' . $redirect);
     exit;
 }
 
@@ -33,5 +46,5 @@ if ($result['success']) {
     flashSet('error', $result['error']);
 }
 
-header('Location: /admin/jobs.php');
+header('Location: ' . $redirect);
 exit;

@@ -28,6 +28,10 @@ const SITE_SETTING_DEFAULTS = [
     'apify_last_test_message' => '',
     'apify_last_test_response' => '',
     'apify_last_sync_response' => '',
+    'apify_schedule_enabled' => '0',
+    'apify_schedule_interval_hours' => '24',
+    'apify_schedule_last_attempt_at' => '',
+    'apify_schedule_last_result' => '',
     'nlp_service_url' => 'http://127.0.0.1:8001',
 ];
 
@@ -346,8 +350,8 @@ function updateApifyIntegrationSettings(array $data): array
             return ['success' => false, 'error' => 'Apify actor ID must be 120 characters or fewer.'];
         }
 
-        if ($keywords === '') {
-            return ['success' => false, 'error' => 'Job keywords are required when integration is enabled.'];
+        if ($searchUrl !== '' && !str_starts_with($searchUrl, 'https://www.linkedin.com/jobs/search')) {
+            return ['success' => false, 'error' => 'LinkedIn search URL must start with https://www.linkedin.com/jobs/search'];
         }
 
         if ($limit < 1 || $limit > 500) {
@@ -377,7 +381,101 @@ function updateApifyIntegrationSettings(array $data): array
     saveSiteSetting('apify_linkedin_search_url', $searchUrl);
     saveSiteSetting('apify_job_limit', (string) max(1, min(500, $limit)));
 
+    if (!$enabled) {
+        saveSiteSetting('apify_schedule_enabled', '0');
+    }
+
     return ['success' => true, 'message' => 'Integration settings saved.'];
+}
+
+function updateApifyScheduleSettings(array $data): array
+{
+    if (!apifyIntegrationConfigured() || !siteSettingEnabled('apify_enabled')) {
+        return [
+            'success' => false,
+            'error' => 'Enable and save Apify integration (token + actor) before configuring cron.',
+        ];
+    }
+
+    $scheduleEnabled = !empty($data['apify_schedule_enabled']);
+    $scheduleHours = (int) ($data['apify_schedule_interval_hours'] ?? 24);
+    $allowedIntervals = array_keys(apifyScheduleIntervalOptions());
+
+    if (!in_array($scheduleHours, $allowedIntervals, true)) {
+        return ['success' => false, 'error' => 'Choose a valid sync schedule interval.'];
+    }
+
+    if ($scheduleEnabled) {
+        $searchUrl = trim(getSiteSetting('apify_linkedin_search_url'));
+        $keywords = trim(getSiteSetting('apify_job_keywords'));
+        if ($searchUrl === '' && $keywords === '') {
+            return [
+                'success' => false,
+                'error' => 'Add a LinkedIn search URL or keywords under Integration before enabling scheduled sync.',
+            ];
+        }
+    }
+
+    saveSiteSetting('apify_schedule_enabled', $scheduleEnabled ? '1' : '0');
+    saveSiteSetting('apify_schedule_interval_hours', (string) $scheduleHours);
+
+    return ['success' => true, 'message' => 'Cron schedule saved.'];
+}
+
+function apifyScheduleIntervalOptions(): array
+{
+    return [
+        6 => 'Every 6 hours',
+        12 => 'Every 12 hours',
+        24 => 'Once a day',
+        48 => 'Every 2 days',
+    ];
+}
+
+function apifyScheduleIntervalHours(): int
+{
+    $hours = (int) getSiteSetting('apify_schedule_interval_hours', '24');
+    $allowed = array_keys(apifyScheduleIntervalOptions());
+
+    return in_array($hours, $allowed, true) ? $hours : 24;
+}
+
+function apifyScheduleEnabled(): bool
+{
+    return siteSettingEnabled('apify_enabled')
+        && siteSettingEnabled('apify_schedule_enabled')
+        && apifyIntegrationConfigured();
+}
+
+function apifyNextScheduledSyncAt(): ?int
+{
+    if (!apifyScheduleEnabled()) {
+        return null;
+    }
+
+    $lastSync = trim(getSiteSetting('apify_last_sync_at'));
+    $intervalSeconds = apifyScheduleIntervalHours() * 3600;
+
+    if ($lastSync === '') {
+        return time();
+    }
+
+    $lastTs = strtotime($lastSync);
+    if ($lastTs === false) {
+        return time();
+    }
+
+    return $lastTs + $intervalSeconds;
+}
+
+function apifyScheduledSyncIsDue(): bool
+{
+    $next = apifyNextScheduledSyncAt();
+    if ($next === null) {
+        return false;
+    }
+
+    return time() >= $next;
 }
 
 function testApifyConnection(): array
@@ -386,14 +484,26 @@ function testApifyConnection(): array
         return ['success' => false, 'error' => 'Save a valid Apify token and actor ID first.'];
     }
 
+    if (!function_exists('curl_init')) {
+        return ['success' => false, 'error' => 'PHP curl extension is not enabled. Enable it, then retry.'];
+    }
+
     $token = getApifyApiToken();
     $url = 'https://api.apify.com/v2/users/me?token=' . rawurlencode($token);
 
-    $response = apifyHttpGet($url);
-    if ($response === null) {
-        return ['success' => false, 'error' => 'Could not reach Apify. Check your internet connection and PHP curl extension.'];
+    $result = apifyHttpGet($url);
+    if (empty($result['ok'])) {
+        $detail = trim((string) ($result['error'] ?? ''));
+
+        return [
+            'success' => false,
+            'error' => 'Could not reach Apify'
+                . ($detail !== '' ? ': ' . $detail : '.')
+                . ' Check internet access, firewall/VPN, and that PHP can use curl.',
+        ];
     }
 
+    $response = (string) ($result['body'] ?? '');
     $data = json_decode($response, true);
     if (!is_array($data)) {
         return ['success' => false, 'error' => 'Apify returned an unexpected response.'];
@@ -421,24 +531,41 @@ function testApifyConnection(): array
     ];
 }
 
-function apifyHttpGet(string $url): ?string
+function apifyHttpGet(string $url): array
 {
     if (function_exists('curl_init')) {
         $ch = curl_init($url);
         curl_setopt_array($ch, [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 20,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_FOLLOWLOCATION => true,
             CURLOPT_HTTPHEADER => ['Accept: application/json'],
+            // Avoid broken HTTP(S)_PROXY values from IDE/terminal environments.
+            CURLOPT_PROXY => '',
+            CURLOPT_NOPROXY => '*',
         ]);
         $response = curl_exec($ch);
         $error = curl_error($ch);
+        $errno = curl_errno($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);
 
-        if ($response === false || $response === '') {
-            return null;
+        if ($response === false) {
+            return [
+                'ok' => false,
+                'error' => $error !== '' ? $error : ('cURL error #' . $errno),
+                'http_status' => $status,
+                'body' => null,
+            ];
         }
 
-        return (string) $response;
+        return [
+            'ok' => true,
+            'error' => null,
+            'http_status' => $status,
+            'body' => (string) $response,
+        ];
     }
 
     $context = stream_context_create([
@@ -456,8 +583,18 @@ function apifyHttpGet(string $url): ?string
 
     $response = @file_get_contents($url, false, $context);
     if ($response === false) {
-        return null;
+        return [
+            'ok' => false,
+            'error' => 'PHP could not open a network stream to Apify. Enable the curl extension.',
+            'http_status' => 0,
+            'body' => null,
+        ];
     }
 
-    return (string) $response;
+    return [
+        'ok' => true,
+        'error' => null,
+        'http_status' => 0,
+        'body' => (string) $response,
+    ];
 }

@@ -503,8 +503,8 @@ body.employer-nav-open { overflow: hidden; }
 }
 .stat-icon--jobs { background: #dbeafe; color: #2563eb; }
 .stat-icon--applicants { background: #d1fae5; color: #059669; }
-.stat-icon--interviews { background: #ffedd5; color: #ea580c; }
 .stat-icon--shortlisted { background: #ede9fe; color: #7c3aed; }
+.stat-icon--rejected { background: #fee2e2; color: #dc2626; }
 
 .stat-trend {
   font-size: 0.6875rem; font-weight: 700;
@@ -623,9 +623,7 @@ body.employer-nav-open { overflow: hidden; }
 .app-status--new { background: var(--emp-accent-bg); color: #0f766e; }
 .app-status--review { background: #f3e8ff; color: #7c3aed; }
 .app-status--rejected { background: #fee2e2; color: #dc2626; }
-.app-status--interviewing { background: #dbeafe; color: #2563eb; }
 .app-status--hired { background: #ecfdf5; color: #047857; }
-.app-status--completed { background: #e2e8f0; color: #475569; }
 
 .job-edit-status {
   margin: 0 0 1rem;
@@ -1087,125 +1085,6 @@ body.employer-app-modal-open {
   background: #b91c1c;
 }
 
-.interview-schedule-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 2200;
-  display: grid;
-  place-items: center;
-  padding: 1rem;
-}
-
-.interview-schedule-modal[hidden] {
-  display: none;
-}
-
-body.interview-schedule-modal-open {
-  overflow: hidden;
-}
-
-.interview-schedule-modal__backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.5);
-}
-
-.interview-schedule-modal__dialog {
-  position: relative;
-  width: min(520px, 100%);
-  background: var(--emp-surface);
-  border-radius: var(--emp-radius);
-  box-shadow: 0 24px 48px rgba(15, 23, 42, 0.2);
-  padding: 1.25rem 1.5rem 1.5rem;
-}
-
-.interview-schedule-modal__header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1.25rem;
-}
-
-.interview-schedule-modal__eyebrow {
-  margin: 0 0 0.25rem;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--emp-accent);
-}
-
-.interview-schedule-modal__header h2 {
-  margin: 0;
-  font-size: 1.25rem;
-}
-
-.interview-schedule-modal__subtitle {
-  margin: 0.375rem 0 0;
-  color: var(--emp-muted);
-  font-size: 0.875rem;
-}
-
-.interview-schedule-modal__close {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: var(--emp-muted);
-}
-
-.interview-schedule-modal__close:hover {
-  background: var(--emp-bg);
-  color: var(--emp-text);
-}
-
-.interview-schedule-modal__form {
-  display: grid;
-  gap: 1rem;
-}
-
-.interview-field {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.interview-field > span {
-  font-size: 0.875rem;
-  font-weight: 600;
-}
-
-.interview-field textarea,
-.interview-field input[type="date"] {
-  width: 100%;
-  padding: 0.75rem 0.875rem;
-  border: 1px solid var(--emp-border-strong);
-  border-radius: 10px;
-  font: inherit;
-}
-
-.interview-field textarea {
-  min-height: 120px;
-  resize: vertical;
-  line-height: 1.5;
-}
-
-.interview-schedule-modal__error {
-  margin: 0;
-  padding: 0.625rem 0.75rem;
-  border-radius: 10px;
-  background: #fef2f2;
-  color: #b91c1c;
-  font-size: 0.875rem;
-}
-
-.interview-schedule-modal__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding-top: 0.25rem;
-}
-
 .match-score { display: flex; align-items: center; gap: 0.5rem; min-width: 120px; }
 .match-bar {
   flex: 1; height: 6px;
@@ -1298,31 +1177,6 @@ body.interview-schedule-modal-open {
 .job-list-stats span { font-size: 0.6875rem; color: var(--emp-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 
 .job-list-actions { display: flex; gap: 0.25rem; }
-
-/* Interviews */
-.interview-list { margin-bottom: 1rem; }
-
-.interview-item {
-  display: flex; gap: 0.875rem;
-  padding: 0.875rem 0;
-  border-bottom: 1px solid var(--emp-border-strong);
-}
-.interview-item:last-child { border-bottom: none; }
-
-.interview-date {
-  width: 48px; text-align: center;
-  background: var(--emp-accent-bg);
-  border-radius: 10px;
-  padding: 0.4375rem 0.25rem;
-  flex-shrink: 0;
-}
-.interview-month { display: block; font-size: 0.625rem; font-weight: 700; color: var(--emp-accent); letter-spacing: 0.04em; }
-.interview-day { display: block; font-size: 1.125rem; font-weight: 700; color: var(--emp-primary); line-height: 1.2; }
-
-.interview-info strong { display: block; font-size: 0.875rem; margin-bottom: 0.125rem; }
-.interview-info span { display: block; font-size: 0.75rem; color: var(--emp-muted); margin-bottom: 0.25rem; }
-.interview-info a { font-size: 0.75rem; font-weight: 600; color: var(--emp-accent); }
-.interview-info a:hover { text-decoration: underline; }
 
 .btn-outline-full {
   display: block;

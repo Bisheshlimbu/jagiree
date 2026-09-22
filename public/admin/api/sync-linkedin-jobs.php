@@ -6,7 +6,7 @@ require_once __DIR__ . '/../../../includes/external-jobs.php';
 requireRole(ROLE_ADMIN);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /admin/settings.php#integrations');
+    header('Location: /admin/settings.php?tab=integration');
     exit;
 }
 
@@ -18,5 +18,5 @@ if ($result['success']) {
     flashSet('error', $result['error']);
 }
 
-header('Location: /admin/settings.php#integrations');
+header('Location: /admin/settings.php?tab=integration');
 exit;

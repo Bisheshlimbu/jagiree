@@ -1,12 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
   const modal = document.getElementById('employerAppModal');
-  const interviewModal = document.getElementById('interviewScheduleModal');
-  const interviewForm = document.getElementById('interviewScheduleForm');
-  const interviewApplicationId = document.getElementById('interviewApplicationId');
-  const interviewReplyMessage = document.getElementById('interviewReplyMessage');
-  const interviewDateInput = document.getElementById('interviewDate');
-  const interviewErrorEl = document.getElementById('interviewScheduleError');
-  const interviewSubmitBtn = document.getElementById('interviewScheduleSubmit');
 
   if (!modal) {
     return;
@@ -21,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const noCvEl = document.getElementById('employerAppModalNoCv');
 
   let activeApplicationId = null;
-  let pendingStatusSelect = null;
 
   document.addEventListener('click', async (event) => {
     const viewButton = event.target.closest('[data-view-application]');
@@ -36,11 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (event.target.closest('[data-close-employer-app-modal]')) {
       closeModal();
-      return;
-    }
-
-    if (event.target.closest('[data-close-interview-modal]')) {
-      closeInterviewModal();
     }
   });
 
@@ -53,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('change', async (event) => {
     const select = event.target.closest('.app-status-select, .employer-app-modal__status-select');
-    if (!select || select.disabled || select.dataset.statusLocked === '1') {
+    if (!select || select.disabled) {
       return;
     }
 
@@ -65,12 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const newStatus = select.value;
     const previousStatus = select.dataset.previousValue ?? select.value;
 
-    if (newStatus === 'interviewing') {
-      select.value = previousStatus;
-      openInterviewModal(applicationId, select);
-      return;
-    }
-
     const success = await updateApplicationStatus(applicationId, newStatus, select);
     if (success) {
       select.dataset.previousValue = newStatus;
@@ -80,61 +61,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      if (interviewModal && !interviewModal.hidden) {
-        closeInterviewModal();
-        return;
-      }
-      if (!modal.hidden) {
-        closeModal();
-      }
-    }
-  });
-
-  interviewForm?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-
-    const applicationId = interviewApplicationId?.value;
-    if (!applicationId || !pendingStatusSelect) {
-      return;
-    }
-
-    hideInterviewError();
-    setInterviewSubmitting(true);
-
-    const formData = new FormData(interviewForm);
-    formData.set('action', 'update_status');
-    formData.set('application_id', applicationId);
-    formData.set('status', 'interviewing');
-
-    try {
-      const response = await fetch('/employer/api/application.php', {
-        method: 'POST',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-        body: formData,
-      });
-      const data = await response.json();
-
-      if (!data.success) {
-        showInterviewError(data.error || 'Could not schedule interview.');
-        return;
-      }
-
-      syncStatusSelects(applicationId, 'interviewing');
-      if (pendingStatusSelect) {
-        pendingStatusSelect.dataset.previousValue = 'interviewing';
-      }
-      if (statusSelect && statusSelect.dataset.applicationId === String(applicationId)) {
-        statusSelect.value = 'interviewing';
-        statusSelect.dataset.previousValue = 'interviewing';
-      }
-
-      closeInterviewModal();
-      showToast(data.message || 'Interview scheduled.');
-    } catch (error) {
-      showInterviewError('Could not schedule interview. Please try again.');
-    } finally {
-      setInterviewSubmitting(false);
+    if (event.key === 'Escape' && !modal.hidden) {
+      closeModal();
     }
   });
 
@@ -175,28 +103,16 @@ document.addEventListener('DOMContentLoaded', () => {
     subtitleEl.textContent = [job.title, job.location].filter(Boolean).join(' · ');
 
     statusSelect.innerHTML = '';
-    if (app.status_locked) {
+    statusSelect.disabled = false;
+    Object.entries(options).forEach(([value, label]) => {
       const option = document.createElement('option');
-      option.value = app.status || 'completed';
-      option.textContent = app.status_label || 'Completed';
-      option.selected = true;
+      option.value = value;
+      option.textContent = label;
+      option.selected = app.status === value;
       statusSelect.appendChild(option);
-      statusSelect.disabled = true;
-      statusSelect.dataset.statusLocked = '1';
-      statusSelect.dataset.applicationId = String(app.id || '');
-    } else {
-      statusSelect.disabled = false;
-      delete statusSelect.dataset.statusLocked;
-      Object.entries(options).forEach(([value, label]) => {
-        const option = document.createElement('option');
-        option.value = value;
-        option.textContent = label;
-        option.selected = app.status === value;
-        statusSelect.appendChild(option);
-      });
-      statusSelect.dataset.applicationId = String(app.id || '');
-      statusSelect.dataset.previousValue = app.status || 'new';
-    }
+    });
+    statusSelect.dataset.applicationId = String(app.id || '');
+    statusSelect.dataset.previousValue = app.status || 'new';
 
     if (app.cv_path) {
       cvLink.href = app.cv_path;
@@ -224,14 +140,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <span>${escapeHtml(item.degree || '')}</span>
       </li>
     `).join('');
-
-    const interviewSection = (app.status === 'interviewing' || app.status === 'completed') && (app.interview_date_label || app.interview_reply)
-      ? `<section class="employer-app-review__section">
-          <h4>${app.status === 'completed' ? 'Interview completed' : 'Interview scheduled'}</h4>
-          ${app.interview_date_label ? `<p><strong>Date:</strong> ${escapeHtml(app.interview_date_label)}</p>` : ''}
-          ${app.interview_reply ? `<div class="employer-app-review__cover-letter">${escapeHtml(app.interview_reply).replace(/\n/g, '<br>')}</div>` : ''}
-        </section>`
-      : '';
 
     bodyEl.innerHTML = `
       <div class="employer-app-review">
@@ -264,8 +172,6 @@ document.addEventListener('DOMContentLoaded', () => {
           </section>
         </div>
 
-        ${interviewSection}
-
         ${seeker.about ? `<section class="employer-app-review__section"><h4>About</h4><p>${escapeHtml(seeker.about)}</p></section>` : ''}
 
         ${app.has_cover_letter ? `
@@ -283,45 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
     footerEl.hidden = false;
   }
 
-  function openInterviewModal(applicationId, sourceSelect) {
-    if (!interviewModal || !interviewForm) {
-      return;
-    }
-
-    pendingStatusSelect = sourceSelect;
-    interviewModal.hidden = false;
-    interviewModal.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('interview-schedule-modal-open');
-    interviewForm.reset();
-    interviewApplicationId.value = applicationId;
-    hideInterviewError();
-    setInterviewSubmitting(false);
-
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    if (interviewDateInput) {
-      interviewDateInput.min = `${yyyy}-${mm}-${dd}`;
-    }
-
-    window.setTimeout(() => interviewReplyMessage?.focus(), 50);
-  }
-
-  function closeInterviewModal() {
-    if (!interviewModal) {
-      return;
-    }
-
-    interviewModal.hidden = true;
-    interviewModal.setAttribute('aria-hidden', 'true');
-    document.body.classList.remove('interview-schedule-modal-open');
-    pendingStatusSelect = null;
-    hideInterviewError();
-    setInterviewSubmitting(false);
-  }
-
-  async function updateApplicationStatus(applicationId, status, sourceSelect, extra = {}) {
+  async function updateApplicationStatus(applicationId, status, sourceSelect) {
     const selects = document.querySelectorAll(`.app-status-select[data-application-id="${applicationId}"]`);
     selects.forEach((el) => {
       el.disabled = true;
@@ -334,12 +202,6 @@ document.addEventListener('DOMContentLoaded', () => {
     formData.set('action', 'update_status');
     formData.set('application_id', applicationId);
     formData.set('status', status);
-    if (extra.replyMessage) {
-      formData.set('reply_message', extra.replyMessage);
-    }
-    if (extra.interviewDate) {
-      formData.set('interview_date', extra.interviewDate);
-    }
 
     try {
       const response = await fetch('/employer/api/application.php', {
@@ -388,29 +250,6 @@ document.addEventListener('DOMContentLoaded', () => {
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('employer-app-modal-open');
     activeApplicationId = null;
-  }
-
-  function showInterviewError(message) {
-    if (!interviewErrorEl) {
-      showToast(message, true);
-      return;
-    }
-    interviewErrorEl.textContent = message;
-    interviewErrorEl.hidden = false;
-  }
-
-  function hideInterviewError() {
-    if (interviewErrorEl) {
-      interviewErrorEl.hidden = true;
-      interviewErrorEl.textContent = '';
-    }
-  }
-
-  function setInterviewSubmitting(isSubmitting) {
-    if (interviewSubmitBtn) {
-      interviewSubmitBtn.disabled = isSubmitting;
-      interviewSubmitBtn.textContent = isSubmitting ? 'Scheduling…' : 'Schedule interview';
-    }
   }
 
   function escapeHtml(value) {

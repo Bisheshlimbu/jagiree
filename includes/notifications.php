@@ -198,45 +198,6 @@ function notifySeekerApplicationStatus(int $seekerId, int $applicationId, string
     );
 }
 
-function notifySeekerInterviewScheduled(
-    int $seekerId,
-    int $applicationId,
-    string $jobTitle,
-    string $interviewDate,
-    string $replyMessage
-): void {
-    if ($seekerId <= 0) {
-        return;
-    }
-
-    $time = strtotime($interviewDate);
-    $dateLabel = $time ? date('l, F j, Y', $time) : $interviewDate;
-    $preview = mb_strlen($replyMessage) > 120 ? mb_substr($replyMessage, 0, 120) . '…' : $replyMessage;
-
-    createNotification(
-        $seekerId,
-        'interview_scheduled',
-        'Interview scheduled',
-        sprintf('Interview for %s on %s. %s', $jobTitle, $dateLabel, $preview),
-        '/seeker/applications.php'
-    );
-}
-
-function notifySeekerInterviewCompleted(int $seekerId, int $applicationId, string $jobTitle): void
-{
-    if ($seekerId <= 0) {
-        return;
-    }
-
-    createNotification(
-        $seekerId,
-        'interview_completed',
-        'Interview completed',
-        sprintf('Your interview for %s is marked completed.', $jobTitle),
-        '/seeker/applications.php'
-    );
-}
-
 function notifyEmployerJobReviewed(int $employerId, int $jobId, string $jobTitle, string $status): void
 {
     if ($employerId <= 0) {

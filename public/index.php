@@ -114,7 +114,7 @@ $trendingJobs = [
                     </div>
                     <h3>AI Career Assistant</h3>
                     <p>
-                        Meet your personalized bot that helps you prepare for interviews, optimize your profile,
+                        Meet your personalized bot that helps you find matching jobs, optimize your profile,
                         and understand market trends in real-time.
                     </p>
                 </article>

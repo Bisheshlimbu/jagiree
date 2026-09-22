@@ -75,6 +75,6 @@ $selectedJobRow = $selectedJobRow ?? [];
 
     <section class="job-detail-section">
         <h3>Job description</h3>
-        <div class="job-detail-description"><?= nl2br(htmlspecialchars($selectedJobRow['description'] ?? '')) ?></div>
+        <div class="job-detail-description"><?= formatJobDescriptionHtml((string) ($selectedJobRow['description'] ?? '')) ?></div>
     </section>
 </article>

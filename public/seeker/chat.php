@@ -17,7 +17,7 @@ $seekerHasCv = $cvMeta['has_cv'];
 $pageTitle = 'AI Assistant — Jagiree';
 $activePage = 'chat';
 $bodyClass = 'seeker-body seeker-body--chat';
-$extraScripts = ['assets/js/job-apply.js', 'assets/js/chat.js'];
+$extraScripts = ['assets/js/job-apply.js', 'assets/js/chat.js?v=5'];
 $siteLogoUrl = siteLogoUrl();
 $chatSiteName = siteName();
 $chatLogoLetter = mb_strtoupper(mb_substr($chatSiteName, 0, 1));
@@ -39,15 +39,6 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
 
 <div class="chat-layout">
     <aside class="chat-sidebar">
-        <div class="chat-intro-card">
-            <?= $chatBotAvatarHtml('chat-intro-icon') ?>
-            <div>
-                <h2>Jagiree AI Assistant</h2>
-                <p>Ask about jobs or upload CV for recommendations</p>
-            </div>
-            <a href="#chatWindow" class="btn-start-chat">Start Chat</a>
-        </div>
-
         <div class="chat-sidebar-section">
             <h3>Quick questions</h3>
             <div class="quick-prompts">
@@ -85,7 +76,7 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
                 <?= $chatBotAvatarHtml('chat-bot-avatar') ?>
                 <div>
                     <strong>Jagiree AI</strong>
-                    <span class="chat-status"><span class="status-online"></span> Online · Profile-aware matching</span>
+                    <span class="chat-status"><span class="status-online"></span> Online · Ask for a role, or match from your profile</span>
                 </div>
             </div>
             <button type="button" class="chat-clear-btn" id="clearChat" title="Clear conversation">
@@ -98,11 +89,11 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
                 <?= $chatBotAvatarHtml('message-avatar') ?>
                 <div class="message-bubble">
                     <p>Hi <?= htmlspecialchars($seekerName) ?>! I'm your Jagiree AI Assistant.</p>
-                    <p>I can explain the platform, Easy Apply vs LinkedIn jobs, and recommend roles with <strong>NLP</strong> (CV text + TF-IDF).</p>
+                    <p>I can explain the platform, Easy Apply vs LinkedIn jobs, and find roles by what you ask (or from your CV when you have one).</p>
                     <ul>
+                        <li>Ask for a role: “frontend jobs”, “SEO”, “backend”</li>
+                        <li>Or say “recommend jobs for me” once your CV/skills are set</li>
                         <li>Ask how Jagiree or applying works</li>
-                        <li>Upload a CV for NLP skill extraction</li>
-                        <li>Get NLP job recommendations</li>
                     </ul>
                     <?php if (!$cvMeta['has_cv']): ?>
                     <p>Upload your CV to unlock Easy Apply and NLP matching.</p>
@@ -112,9 +103,9 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
         </div>
 
         <div class="chat-suggestions" id="chatSuggestions">
-            <button type="button" class="suggestion-chip" data-prompt="Recommend jobs for me">Get recommendations</button>
-            <button type="button" class="suggestion-chip" data-prompt="How does Jagiree work?">About Jagiree</button>
-            <button type="button" class="suggestion-chip" data-action="upload-cv">Upload CV</button>
+            <button type="button" class="suggestion-chip suggestion-chip--recs" data-prompt="Recommend jobs for me">Get recommendations</button>
+            <button type="button" class="suggestion-chip suggestion-chip--about" data-prompt="How does Jagiree work?">About Jagiree</button>
+            <button type="button" class="suggestion-chip suggestion-chip--cv" data-action="upload-cv">Upload CV</button>
         </div>
 
         <form class="chat-input-area" id="chatForm">
@@ -139,6 +130,7 @@ require_once __DIR__ . '/../../includes/seeker/layout-start.php';
 
 <script>
 window.chatSeekerConfig = <?= json_encode([
+    'seekerId' => $userId,
     'hasCv' => $cvMeta['has_cv'],
     'cvFilename' => $cvMeta['filename'],
     'cvUpdatedLabel' => $cvMeta['updated_label'],

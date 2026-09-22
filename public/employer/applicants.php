@@ -110,9 +110,6 @@ require_once __DIR__ . '/../../includes/employer/layout-start.php';
                     </td>
                     <td><?= htmlspecialchars($app['role']) ?></td>
                     <td>
-                        <?php if (!empty($app['status_locked'])): ?>
-                        <span class="app-status app-status--completed"><?= htmlspecialchars($app['status_label']) ?></span>
-                        <?php else: ?>
                         <select
                             class="app-status-select"
                             data-application-id="<?= (int) $app['id'] ?>"
@@ -124,7 +121,6 @@ require_once __DIR__ . '/../../includes/employer/layout-start.php';
                             </option>
                             <?php endforeach; ?>
                         </select>
-                        <?php endif; ?>
                     </td>
                     <td>
                         <div class="match-score">

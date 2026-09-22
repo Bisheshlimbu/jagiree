@@ -14,6 +14,12 @@ if (!$job) {
     exit;
 }
 
+if (!jobCanEditByAdmin($job)) {
+    flashSet('error', 'LinkedIn (Apify) jobs cannot be edited. You can delete them from the jobs list.');
+    header('Location: /admin/jobs.php');
+    exit;
+}
+
 $error = null;
 $employers = fetchEmployersForJobForm();
 $form = [

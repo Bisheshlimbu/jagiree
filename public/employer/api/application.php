@@ -28,15 +28,7 @@ if ($applicationId <= 0) {
 
 if ($action === 'update_status') {
     $status = trim($_POST['status'] ?? '');
-    $replyMessage = trim($_POST['reply_message'] ?? '');
-    $interviewDate = trim($_POST['interview_date'] ?? '');
-    $result = updateEmployerApplicationStatus(
-        $employerId,
-        $applicationId,
-        $status,
-        $replyMessage,
-        $interviewDate !== '' ? $interviewDate : null
-    );
+    $result = updateEmployerApplicationStatus($employerId, $applicationId, $status);
     if (!$result['success']) {
         http_response_code(400);
     }

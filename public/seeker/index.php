@@ -151,11 +151,11 @@ $filters = ['All Jobs', 'Remote', 'IT & Tech', 'Design', 'Fresher', 'Kathmandu']
                 <?php if ($applicationSummary['review'] > 0): ?>
                 <li><span class="status-dot status-dot--review"></span> <?= (int) $applicationSummary['review'] ?> Under review</li>
                 <?php endif; ?>
-                <?php if ($applicationSummary['interview'] > 0): ?>
-                <li><span class="status-dot status-dot--interview"></span> <?= (int) $applicationSummary['interview'] ?> Interview scheduled</li>
-                <?php endif; ?>
                 <?php if ($applicationSummary['applied'] > 0): ?>
                 <li><span class="status-dot status-dot--applied"></span> <?= (int) $applicationSummary['applied'] ?> Applied</li>
+                <?php endif; ?>
+                <?php if ($applicationSummary['rejected'] > 0): ?>
+                <li><span class="status-dot status-dot--rejected"></span> <?= (int) $applicationSummary['rejected'] ?> Not selected</li>
                 <?php endif; ?>
                 <?php endif; ?>
             </ul>

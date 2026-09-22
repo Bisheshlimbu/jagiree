@@ -94,6 +94,29 @@ function jobCreatedByLabel(string $createdBy): string
     return $createdBy === 'employer' ? 'Employer' : 'Admin';
 }
 
+function jobAdminOriginLabel(array $job): string
+{
+    if (jobIsExternal($job)) {
+        return jobSourceLabel($job['source'] ?? 'linkedin');
+    }
+
+    return jobCreatedByLabel($job['created_by'] ?? 'admin');
+}
+
+function jobAdminOriginClass(array $job): string
+{
+    if (($job['source'] ?? '') === 'linkedin' || jobIsExternal($job)) {
+        return 'linkedin';
+    }
+
+    return ($job['created_by'] ?? 'admin') === 'employer' ? 'employer' : 'admin';
+}
+
+function jobCanEditByAdmin(array $job): bool
+{
+    return !jobIsExternal($job);
+}
+
 function formatEmployerOptionLabel(array $employer): string
 {
     $name = trim($employer['full_name'] ?? '');
@@ -140,6 +163,7 @@ function formatJobSubmittedAt(?string $createdAt): string
 function formatAdminJobRow(array $job): array
 {
     $employerName = trim($job['employer_name'] ?? '');
+    $isExternal = jobIsExternal($job);
 
     return [
         'id' => (int) $job['id'],
@@ -147,24 +171,45 @@ function formatAdminJobRow(array $job): array
         'company' => $job['company_name'],
         'employer_name' => $employerName !== '' ? $employerName : '—',
         'created_by' => $job['created_by'] ?? 'admin',
-        'created_by_label' => jobCreatedByLabel($job['created_by'] ?? 'admin'),
+        'source' => $job['source'] ?? 'employer',
+        'external_url' => $job['external_url'] ?? null,
+        'is_external' => $isExternal,
+        'can_edit' => jobCanEditByAdmin($job),
+        'created_by_label' => jobAdminOriginLabel($job),
+        'created_by_class' => jobAdminOriginClass($job),
         'submitted' => formatJobSubmittedAt($job['created_at'] ?? null),
         'status' => $job['status'] ?? 'pending',
         'status_label' => jobStatusLabel($job['status'] ?? 'pending'),
     ];
 }
 
-function fetchAdminJobs(): array
+function countAdminJobs(): int
 {
     ensureJobsSchema();
 
-    $stmt = db()->query(
-        'SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills,
-                j.description, j.status, j.created_by, j.created_at, u.full_name AS employer_name
+    return (int) db()->query('SELECT COUNT(*) FROM jobs')->fetchColumn();
+}
+
+/**
+ * @return list<array<string, mixed>>
+ */
+function fetchAdminJobs(?int $limit = null, int $offset = 0): array
+{
+    ensureJobsSchema();
+
+    $sql = 'SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills,
+                j.description, j.status, j.created_by, j.source, j.external_url, j.created_at, u.full_name AS employer_name
          FROM jobs j
          LEFT JOIN users u ON u.id = j.employer_id
-         ORDER BY datetime(j.created_at) DESC, j.id DESC'
-    );
+         ORDER BY datetime(j.created_at) DESC, j.id DESC';
+
+    if ($limit !== null) {
+        $limit = max(1, min(100, $limit));
+        $offset = max(0, $offset);
+        $sql .= ' LIMIT ' . $limit . ' OFFSET ' . $offset;
+    }
+
+    $stmt = db()->query($sql);
 
     return array_map('formatAdminJobRow', $stmt->fetchAll(PDO::FETCH_ASSOC) ?: []);
 }
@@ -418,7 +463,8 @@ function fetchJobById(int $id): ?array
 
     $stmt = db()->prepare(
         'SELECT j.id, j.employer_id, j.company_name, j.title, j.location, j.job_type, j.salary, j.skills,
-                j.description, j.status, j.created_by, j.created_at, u.full_name AS employer_name
+                j.description, j.status, j.created_by, j.source, j.external_id, j.external_url, j.created_at,
+                u.full_name AS employer_name
          FROM jobs j
          LEFT JOIN users u ON u.id = j.employer_id
          WHERE j.id = :id
@@ -437,6 +483,10 @@ function updateJobByAdmin(int $id, array $data): array
     $job = fetchJobById($id);
     if (!$job) {
         return ['success' => false, 'error' => 'Job not found.'];
+    }
+
+    if (!jobCanEditByAdmin($job)) {
+        return ['success' => false, 'error' => 'LinkedIn (Apify) jobs cannot be edited. You can delete them instead.'];
     }
 
     $title = trim($data['title'] ?? '');
@@ -500,6 +550,30 @@ function updateJobByAdmin(int $id, array $data): array
     }
 
     return ['success' => true, 'message' => 'Job updated successfully.'];
+}
+
+function deleteJobByAdmin(int $id): array
+{
+    ensureJobsSchema();
+
+    $job = fetchJobById($id);
+    if (!$job) {
+        return ['success' => false, 'error' => 'Job not found.'];
+    }
+
+    $title = trim((string) ($job['title'] ?? 'Job'));
+
+    try {
+        $stmt = db()->prepare('DELETE FROM jobs WHERE id = :id');
+        $stmt->execute(['id' => $id]);
+    } catch (PDOException) {
+        return ['success' => false, 'error' => 'Could not delete job. Please try again.'];
+    }
+
+    return [
+        'success' => true,
+        'message' => 'Deleted “' . $title . '”.',
+    ];
 }
 
 function updateJobStatusByAdmin(int $id, string $status): array

@@ -67,6 +67,22 @@ Open [http://localhost:8000](http://localhost:8000)
 
 Dashboards require login with the matching role. Wrong-role users are redirected to their own dashboard.
 
+## LinkedIn job sync (Apify)
+
+1. Configure Apify in **Admin → Settings → Integration** (token, actor, search URL).
+2. Use **Sync LinkedIn jobs now** for a manual pull.
+3. Optional schedule: open **Settings → Cron**, enable **scheduled sync**, pick a frequency, then add cron:
+
+```bash
+*/15 * * * * php /absolute/path/to/Jageree/scripts/sync-linkedin-jobs.php
+```
+
+The script only calls Apify when the schedule is due. Force a run with:
+
+```bash
+php scripts/sync-linkedin-jobs.php --force
+```
+
 ## Current Status
 
 - [x] Landing page (guest / not logged in)
@@ -92,7 +108,7 @@ Pages:
 Open [http://localhost:8000/employer/](http://localhost:8000/employer/) after starting the server.
 
 Pages:
-- `/employer/` — Overview with stats, applications, AI insights, active jobs, interviews
+- `/employer/` — Overview with stats, applications, AI insights, active jobs
 - `/employer/job-listings.php` — Manage job postings
 - `/employer/applicants.php` — Talent pool / applicants
 - `/employer/post-job.php` — Submit new job for admin approval
