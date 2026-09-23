@@ -410,7 +410,8 @@ function fetchApifyDatasetItems(string $token, string $datasetId): array
         return [];
     }
 
-    if (array_is_list($decoded)) {
+    // PHP < 8.1 does not have array_is_list(); detect a sequential list manually.
+    if ($decoded === [] || array_keys($decoded) === range(0, count($decoded) - 1)) {
         return $decoded;
     }
 
