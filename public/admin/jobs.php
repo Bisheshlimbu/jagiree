@@ -32,10 +32,34 @@ $jobsPageUrl = static function (int $targetPage): string {
         <a href="/admin/job-add.php" class="btn-sm btn-sm--primary">Add Job</a>
     </div>
 
+    <?php if ($jobRequests !== []): ?>
+    <form method="post" action="/admin/job-action.php" id="jobsBulkForm" class="bulk-bar" hidden>
+        <input type="hidden" name="action" value="bulk_delete">
+        <input type="hidden" name="page" value="<?= (int) $page ?>">
+        <label class="bulk-bar__select-all">
+            <input type="checkbox" id="jobsSelectAllPage" aria-label="Select all jobs on this page">
+            <span>Select page</span>
+        </label>
+        <p class="bulk-bar__count"><span id="jobsSelectedCount">0</span> selected</p>
+        <button
+            type="submit"
+            class="btn-sm btn-sm--danger"
+            id="jobsBulkDeleteBtn"
+            disabled
+            onclick="return confirm('Delete the selected jobs? This cannot be undone.');"
+        >Delete selected</button>
+    </form>
+    <?php endif; ?>
+
     <div class="table-wrap">
-        <table class="data-table">
+        <table class="data-table" id="jobsTable">
             <thead>
                 <tr>
+                    <th class="data-table__check">
+                        <?php if ($jobRequests !== []): ?>
+                        <input type="checkbox" id="jobsSelectAllHeader" aria-label="Select all jobs on this page">
+                        <?php endif; ?>
+                    </th>
                     <th>Job Title</th>
                     <th>Company</th>
                     <th>Employer</th>
@@ -48,11 +72,21 @@ $jobsPageUrl = static function (int $targetPage): string {
             <tbody>
                 <?php if ($jobRequests === []): ?>
                 <tr>
-                    <td colspan="7" class="table-empty">No job listings yet. Click Add Job to create one.</td>
+                    <td colspan="8" class="table-empty">No job listings yet. Click Add Job to create one.</td>
                 </tr>
                 <?php else: ?>
                 <?php foreach ($jobRequests as $job): ?>
                 <tr>
+                    <td class="data-table__check">
+                        <input
+                            type="checkbox"
+                            class="job-row-check"
+                            form="jobsBulkForm"
+                            name="job_ids[]"
+                            value="<?= (int) $job['id'] ?>"
+                            aria-label="Select <?= htmlspecialchars($job['title'], ENT_QUOTES) ?>"
+                        >
+                    </td>
                     <td><strong><?= htmlspecialchars($job['title']) ?></strong></td>
                     <td><?= htmlspecialchars($job['company']) ?></td>
                     <td><?= htmlspecialchars($job['employer_name']) ?></td>
@@ -146,5 +180,40 @@ $jobsPageUrl = static function (int $targetPage): string {
     </div>
     <?php endif; ?>
 </section>
+
+<script>
+(function () {
+  const form = document.getElementById('jobsBulkForm');
+  const table = document.getElementById('jobsTable');
+  if (!form || !table) return;
+
+  const checks = Array.from(table.querySelectorAll('.job-row-check'));
+  const header = document.getElementById('jobsSelectAllHeader');
+  const pageToggle = document.getElementById('jobsSelectAllPage');
+  const countEl = document.getElementById('jobsSelectedCount');
+  const deleteBtn = document.getElementById('jobsBulkDeleteBtn');
+
+  function sync() {
+    const selected = checks.filter((el) => el.checked);
+    const n = selected.length;
+    form.hidden = n === 0;
+    if (countEl) countEl.textContent = String(n);
+    if (deleteBtn) deleteBtn.disabled = n === 0;
+    const allChecked = checks.length > 0 && selected.length === checks.length;
+    if (header) header.checked = allChecked;
+    if (pageToggle) pageToggle.checked = allChecked;
+  }
+
+  function setAll(on) {
+    checks.forEach((el) => { el.checked = on; });
+    sync();
+  }
+
+  checks.forEach((el) => el.addEventListener('change', sync));
+  header?.addEventListener('change', () => setAll(header.checked));
+  pageToggle?.addEventListener('change', () => setAll(pageToggle.checked));
+  sync();
+})();
+</script>
 
 <?php require_once __DIR__ . '/../../includes/admin/layout-end.php'; ?>

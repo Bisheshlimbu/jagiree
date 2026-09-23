@@ -576,6 +576,49 @@ function deleteJobByAdmin(int $id): array
     ];
 }
 
+/**
+ * @param list<int> $ids
+ */
+function deleteJobsByAdmin(array $ids): array
+{
+    ensureJobsSchema();
+
+    $ids = array_values(array_unique(array_filter(
+        array_map(static fn ($id): int => (int) $id, $ids),
+        static fn (int $id): bool => $id > 0
+    )));
+
+    if ($ids === []) {
+        return ['success' => false, 'error' => 'Select at least one job to delete.'];
+    }
+
+    if (count($ids) > 200) {
+        return ['success' => false, 'error' => 'You can delete at most 200 jobs at once.'];
+    }
+
+    $placeholders = implode(',', array_fill(0, count($ids), '?'));
+
+    try {
+        $stmt = db()->prepare("DELETE FROM jobs WHERE id IN ($placeholders)");
+        $stmt->execute($ids);
+        $deleted = $stmt->rowCount();
+    } catch (PDOException) {
+        return ['success' => false, 'error' => 'Could not delete the selected jobs. Please try again.'];
+    }
+
+    if ($deleted < 1) {
+        return ['success' => false, 'error' => 'No matching jobs were found to delete.'];
+    }
+
+    return [
+        'success' => true,
+        'message' => $deleted === 1
+            ? 'Deleted 1 job.'
+            : 'Deleted ' . $deleted . ' jobs.',
+        'deleted' => $deleted,
+    ];
+}
+
 function updateJobStatusByAdmin(int $id, string $status): array
 {
     ensureJobsSchema();

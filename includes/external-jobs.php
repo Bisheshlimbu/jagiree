@@ -84,6 +84,69 @@ function buildLinkedInJobsSearchUrl(string $keywords, string $location = ''): st
 }
 
 /**
+ * True when the URL is a LinkedIn jobs search page (public or logged-in).
+ */
+function isLinkedInJobsSearchUrl(string $url): bool
+{
+    $url = trim($url);
+    if ($url === '') {
+        return false;
+    }
+
+    return (bool) preg_match(
+        '#^https://(?:www\.)?linkedin\.com/jobs/(?:search|search-results)/?#i',
+        $url
+    );
+}
+
+/**
+ * Convert LinkedIn search URLs to the public /jobs/search/ form scrapers expect.
+ * Logged-in /jobs/search-results/ links usually fail or return unrelated jobs.
+ */
+function normalizeLinkedInJobsSearchUrl(string $url): string
+{
+    $url = trim($url);
+    if ($url === '' || !isLinkedInJobsSearchUrl($url)) {
+        return '';
+    }
+
+    $parts = parse_url($url);
+    if (!is_array($parts)) {
+        return '';
+    }
+
+    $query = [];
+    parse_str((string) ($parts['query'] ?? ''), $query);
+
+    // Keep filters Apify/public search can use; drop session-only noise.
+    $keep = [];
+    foreach ($query as $key => $value) {
+        $key = (string) $key;
+        if ($value === null || $value === '') {
+            continue;
+        }
+        if (in_array($key, ['origin', 'referralSearchId', 'position', 'pageNum', 'trk', 'refId', 'eBP'], true)) {
+            continue;
+        }
+        if ($key === 'keywords' || $key === 'location' || $key === 'geoId' || $key === 'distance'
+            || $key === 'f_TPR' || $key === 'f_WT' || $key === 'f_JT' || $key === 'f_E'
+            || $key === 'f_C' || $key === 'f_PP' || $key === 'f_I' || $key === 'f_F'
+            || $key === 'f_SB2' || $key === 'f_AL' || $key === 'f_EA' || $key === 'f_SAL'
+            || str_starts_with($key, 'f_')
+        ) {
+            $keep[$key] = $value;
+        }
+    }
+
+    $normalized = 'https://www.linkedin.com/jobs/search/';
+    if ($keep !== []) {
+        $normalized .= '?' . http_build_query($keep);
+    }
+
+    return $normalized;
+}
+
+/**
  * Build actor input for the configured LinkedIn jobs scraper.
  *
  * Supports common Store actors:
@@ -100,10 +163,13 @@ function buildApifyLinkedInActorInput(): array
     $location = trim(getSiteSetting('apify_job_location'));
     $actorId = mb_strtolower(trim(getApifyActorId()));
 
+    $usingCustomUrl = false;
     $searchUrl = '';
-    if ($customUrl !== '' && str_starts_with($customUrl, 'https://www.linkedin.com/jobs/search')) {
-        $searchUrl = $customUrl;
-    } else {
+    if ($customUrl !== '') {
+        $searchUrl = normalizeLinkedInJobsSearchUrl($customUrl);
+        $usingCustomUrl = $searchUrl !== '';
+    }
+    if ($searchUrl === '') {
         $searchUrl = buildLinkedInJobsSearchUrl($keywords, $location);
     }
 
@@ -120,11 +186,14 @@ function buildApifyLinkedInActorInput(): array
         if ($searchUrl !== '') {
             $input['searchUrls'] = [$searchUrl];
         }
-        if ($keywords !== '') {
-            $input['query'] = $keywords;
-        }
-        if ($location !== '') {
-            $input['location'] = $location;
+        // Only send query/location when we are not locking to a specific search URL.
+        if (!$usingCustomUrl) {
+            if ($keywords !== '') {
+                $input['query'] = $keywords;
+            }
+            if ($location !== '') {
+                $input['location'] = $location;
+            }
         }
 
         return [$searchUrl !== '' ? $searchUrl : $keywords, $input];
@@ -139,22 +208,22 @@ function buildApifyLinkedInActorInput(): array
         'urls' => [$searchUrl],
         'searchUrls' => [$searchUrl],
         'scrapeCompany' => true,
-        // Newer curious_coder builds
         'limitPerSource' => $limit,
-        // Older curious_coder / search scrapers
         'count' => $limit,
-        // CrawlWorks-compatible field (safe extra; ignored by curious_coder)
         'jobsToFetch' => $limit,
-        'autoConvertToAiSearch' => true,
+        // Keep false for pasted search URLs so the actor scrapes that exact link.
+        'autoConvertToAiSearch' => !$usingCustomUrl,
         'splitByLocation' => false,
     ];
 
-    if ($keywords !== '') {
-        $input['keywords'] = $keywords;
-        $input['query'] = $keywords;
-    }
-    if ($location !== '') {
-        $input['location'] = $location;
+    if (!$usingCustomUrl) {
+        if ($keywords !== '') {
+            $input['keywords'] = $keywords;
+            $input['query'] = $keywords;
+        }
+        if ($location !== '') {
+            $input['location'] = $location;
+        }
     }
 
     return [$searchUrl, $input];

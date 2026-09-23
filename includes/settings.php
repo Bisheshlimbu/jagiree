@@ -330,6 +330,8 @@ function getApifyActorId(): string
 
 function updateApifyIntegrationSettings(array $data): array
 {
+    require_once __DIR__ . '/external-jobs.php';
+
     $enabled = !empty($data['apify_enabled']);
     $showExternalJobs = !empty($data['apify_show_external_jobs']);
     $actorId = trim($data['apify_actor_id'] ?? '');
@@ -350,8 +352,16 @@ function updateApifyIntegrationSettings(array $data): array
             return ['success' => false, 'error' => 'Apify actor ID must be 120 characters or fewer.'];
         }
 
-        if ($searchUrl !== '' && !str_starts_with($searchUrl, 'https://www.linkedin.com/jobs/search')) {
-            return ['success' => false, 'error' => 'LinkedIn search URL must start with https://www.linkedin.com/jobs/search'];
+        if ($searchUrl !== '' && !isLinkedInJobsSearchUrl($searchUrl)) {
+            return [
+                'success' => false,
+                'error' => 'LinkedIn search URL must be a jobs search link (…/jobs/search/… or …/jobs/search-results/…). Use an incognito/public search URL when possible.',
+            ];
+        }
+
+        // Store the public form scrapers understand.
+        if ($searchUrl !== '') {
+            $searchUrl = normalizeLinkedInJobsSearchUrl($searchUrl);
         }
 
         if ($limit < 1 || $limit > 500) {

@@ -366,9 +366,9 @@ require_once __DIR__ . '/../../includes/admin/layout-start.php';
                     type="url"
                     name="apify_linkedin_search_url"
                     value="<?= htmlspecialchars($settings['apify_linkedin_search_url'] ?? '') ?>"
-                    placeholder="https://www.linkedin.com/jobs/search/?keywords=UI%20designer&location=Nepal"
+                    placeholder="https://www.linkedin.com/jobs/search/?keywords=frontend%20developer&location=Nepal"
                 >
-                <p class="form-hint">Optional for saving credentials, but required for sync: paste the LinkedIn jobs URL from a successful Apify Console run (incognito/public search works best).</p>
+                <p class="form-hint">Paste a public LinkedIn jobs search URL (open LinkedIn in <strong>incognito</strong>, search, copy the address). Prefer <code>/jobs/search/?</code> — logged-in <code>/jobs/search-results/?</code> links are converted automatically. Use specific keywords (e.g. frontend developer), not just “jobs”.</p>
             </label>
 
             <div class="integration-sync-fields">
