@@ -357,7 +357,7 @@ require_once __DIR__ . '/../../includes/admin/layout-start.php';
                     placeholder="username/linkedin-jobs-scraper"
                     maxlength="120"
                 >
-                <p class="form-hint">Actor ID from Apify Store, e.g. <code>curious_coder/linkedin-jobs-scraper</code>.</p>
+                <p class="form-hint">Actor ID from Apify Store. Recommended: <code>curious_coder/linkedin-jobs-scraper</code>. Also supported: <code>crawlworks/linkedin-jobs-scraper</code>.</p>
             </label>
 
             <label class="form-field">

@@ -84,7 +84,11 @@ function buildLinkedInJobsSearchUrl(string $keywords, string $location = ''): st
 }
 
 /**
- * Build actor input matching curious_coder/linkedin-jobs-scraper.
+ * Build actor input for the configured LinkedIn jobs scraper.
+ *
+ * Supports common Store actors:
+ * - curious_coder/linkedin-jobs-scraper (urls + limitPerSource)
+ * - crawlworks/linkedin-jobs-scraper (searchUrls + jobsToFetch)
  *
  * @return array{0: ?string, 1: array<string, mixed>}
  */
@@ -94,6 +98,7 @@ function buildApifyLinkedInActorInput(): array
     $customUrl = trim(getSiteSetting('apify_linkedin_search_url'));
     $keywords = trim(getSiteSetting('apify_job_keywords'));
     $location = trim(getSiteSetting('apify_job_location'));
+    $actorId = mb_strtolower(trim(getApifyActorId()));
 
     $searchUrl = '';
     if ($customUrl !== '' && str_starts_with($customUrl, 'https://www.linkedin.com/jobs/search')) {
@@ -102,19 +107,55 @@ function buildApifyLinkedInActorInput(): array
         $searchUrl = buildLinkedInJobsSearchUrl($keywords, $location);
     }
 
+    if ($searchUrl === '' && $keywords === '') {
+        return [null, []];
+    }
+
+    // CrawlWorks actor: required field is jobsToFetch (Apify may report it as input.jobs.jobsToFetch).
+    if (str_contains($actorId, 'crawlworks')) {
+        $input = [
+            'jobsToFetch' => $limit,
+            'enrichCompanyDetails' => false,
+        ];
+        if ($searchUrl !== '') {
+            $input['searchUrls'] = [$searchUrl];
+        }
+        if ($keywords !== '') {
+            $input['query'] = $keywords;
+        }
+        if ($location !== '') {
+            $input['location'] = $location;
+        }
+
+        return [$searchUrl !== '' ? $searchUrl : $keywords, $input];
+    }
+
+    // Default: curious_coder/linkedin-jobs-scraper (+ compatible aliases).
     if ($searchUrl === '') {
         return [null, []];
     }
 
     $input = [
         'urls' => [$searchUrl],
+        'searchUrls' => [$searchUrl],
         'scrapeCompany' => true,
-        // Newer actor versions prefer limitPerSource; older ones used count.
+        // Newer curious_coder builds
         'limitPerSource' => $limit,
+        // Older curious_coder / search scrapers
         'count' => $limit,
+        // CrawlWorks-compatible field (safe extra; ignored by curious_coder)
+        'jobsToFetch' => $limit,
         'autoConvertToAiSearch' => true,
         'splitByLocation' => false,
     ];
+
+    if ($keywords !== '') {
+        $input['keywords'] = $keywords;
+        $input['query'] = $keywords;
+    }
+    if ($location !== '') {
+        $input['location'] = $location;
+    }
 
     return [$searchUrl, $input];
 }
