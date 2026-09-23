@@ -19,7 +19,7 @@ Jageree/
 ├── public/            # Web root
 │   ├── index.php      # Landing page (guest)
 │   └── assets/        # CSS, JS, images
-├── python/            # NLP chatbot service (coming soon)
+├── python/            # NLP service (CV parse + TF-IDF job ranking)
 ├── sql/               # Database schema
 └── router.php         # Dev server router
 ```
@@ -54,6 +54,41 @@ php -S localhost:8000 router.php
 ```
 
 Open [http://localhost:8000](http://localhost:8000)
+
+### 3. Start the NLP service (required for CV skills + AI recommendations)
+
+In a **second terminal**, from the project root:
+
+**macOS / Linux**
+
+```bash
+cd python
+source .venv/bin/activate
+uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+**Windows**
+
+```bash
+cd python
+.venv\Scripts\activate
+uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+First-time setup (once):
+
+```bash
+cd python
+python -m venv .venv
+# macOS/Linux: source .venv/bin/activate
+# Windows:     .venv\Scripts\activate
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
+
+Health check: [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health)
+
+More detail: [`python/README.md`](python/README.md)
 
 ## Authentication
 
@@ -90,7 +125,8 @@ php scripts/sync-linkedin-jobs.php --force
 - [x] Employer dashboard (Overview, Job Listings, Applicants, Analytics, Settings, Post Job)
 - [x] Seeker dashboard (Overview, Profile, Applications, Recommendations, Analytics, Settings)
 - [x] Authentication (login / register)
-- [ ] Python NLP chatbot integration
+- [x] Python NLP service (CV parse, TF-IDF recommendations, AI Chat)
+- [x] LinkedIn job sync via Apify (manual + scheduled cron)
 
 ## Admin Dashboard
 
@@ -98,10 +134,10 @@ Open [http://localhost:8000/admin/](http://localhost:8000/admin/) after starting
 
 Pages:
 - `/admin/` — Overview with stats, chart, AI insights, recent registrations
-- `/admin/jobs.php` — Approve/reject employer job post requests
+- `/admin/jobs.php` — Approve/reject jobs, bulk delete, manage LinkedIn listings
 - `/admin/users.php` — Manage platform users
 - `/admin/analytics.php` — Analytics (placeholder)
-- `/admin/settings.php` — Platform & NLP bot settings
+- `/admin/settings.php` — General, Notifications, Integration (Apify), Cron
 
 ## Employer Dashboard
 
