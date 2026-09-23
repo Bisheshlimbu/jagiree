@@ -2,7 +2,9 @@ fastapi==0.115.6
 uvicorn[standard]==0.32.1
 pdfplumber==0.11.4
 python-docx==1.1.2
-scikit-learn==1.5.2
-numpy==1.26.4
-spacy==3.7.5
+# Flexible pins so Windows/Python 3.12–3.13 can install binary wheels
+# (numpy 1.26.4 has no cp313 wheel and fails to compile without MSVC)
+numpy>=1.26.4,<2.3
+scikit-learn>=1.5.2,<1.7
+spacy>=3.7.5,<3.9
 pydantic==2.10.3

@@ -69,22 +69,23 @@ uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 **Windows**
 
-```bash
+```powershell
 cd python
-.venv\Scripts\activate
-uvicorn app.main:app --host 127.0.0.1 --port 8001
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-First-time setup (once):
+First-time setup (once) — install [Python from python.org](https://www.python.org/downloads/) first (check **Add to PATH**):
 
-```bash
+```powershell
 cd python
-python -m venv .venv
-# macOS/Linux: source .venv/bin/activate
-# Windows:     .venv\Scripts\activate
-pip install -r requirements.txt
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
+
+If Windows says *Python was not found / Microsoft Store*, disable App execution aliases for `python.exe` / `python3.exe`, then reinstall Python with PATH enabled.
 
 Health check: [http://127.0.0.1:8001/health](http://127.0.0.1:8001/health)
 

@@ -6,6 +6,15 @@ Jagiree PHP (chat CV upload + “Recommend jobs for me”) calls this service at
 
 ## Setup (once)
 
+### Install Python first
+
+You need **Python 3.10–3.12** (recommended) or **3.13**.
+
+- **Best on Windows:** install **Python 3.12** from [python.org/downloads](https://www.python.org/downloads/)  
+  (check **“Add python.exe to PATH”**)
+- Avoid the Microsoft Store stub. If you see *“Python was not found… Microsoft Store”*, disable App execution aliases for `python.exe` / `python3.exe`.
+- After installing, close and reopen PowerShell, then verify: `py --version`
+
 ### macOS / Linux
 
 ```bash
@@ -16,15 +25,36 @@ pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
 
-### Windows
+### Windows (PowerShell)
 
-```bash
+Prefer creating the venv with **Python 3.12** if you have several versions:
+
+```powershell
 cd python
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
 python -m spacy download en_core_web_sm
 ```
+
+If you only have 3.13, the same commands work with the updated `requirements.txt` (use `py -3.13` or just `py`).
+
+If an old broken `.venv` exists, delete it first:
+
+```powershell
+Remove-Item -Recurse -Force .venv
+```
+
+Then recreate with the steps above.
+
+If `Activate.ps1` is blocked:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Then run `.\.venv\Scripts\Activate.ps1` again.
 
 ## Run
 
@@ -40,10 +70,17 @@ uvicorn app.main:app --host 127.0.0.1 --port 8001
 
 ### Windows
 
-```bash
+```powershell
 cd python
-.venv\Scripts\activate
-uvicorn app.main:app --host 127.0.0.1 --port 8001
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+```
+
+Without activating the venv:
+
+```powershell
+cd python
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
 ### One-liner (from project root)
@@ -56,8 +93,9 @@ cd python && source .venv/bin/activate && uvicorn app.main:app --host 127.0.0.1 
 
 **Windows**
 
-```bash
-cd python && .venv\Scripts\activate && uvicorn app.main:app --host 127.0.0.1 --port 8001
+```powershell
+cd python
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
 ## Health check
